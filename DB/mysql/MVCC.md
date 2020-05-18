@@ -22,10 +22,11 @@ MVCC，Multi-Version Concurrency Control，多版本并发控制。MVCC 是一�
 
 MVCC 在mysql 中的实现依赖的是 **undo log** 与 **read view**。
 
-1. undo log: undo log中记录的是数据表记录行的多个版本，也就是事务执行过程中的回滚段,其实就是MVCC 中的一行原始数据的多个版本镜像数据。
-2. read view: 主要用来判断当前版本数据的可见性。
+### **undo log**
 
-## undo 行数据更新过程
+ undo log中记录的是数据表记录行的多个版本，也就是事务执行过程中的回滚段,其实就是MVCC 中的一行原始数据的多个版本镜像数据。
+
+#### undo 行数据更新过程
 
 初始数据：table name : test
 
@@ -47,35 +48,44 @@ MVCC 在mysql 中的实现依赖的是 **undo log** 与 **read view**。
 
 ![image-20200502154623061](assets\image-20200502154623061.png)
 
-## read view
+### **read view**
 
-### 基础介绍
+系统当前的 read view 数据
 
-read view 数据存放的是当前的未commit的活跃事务列表数据
+```text
+ReadView {
+    creator_trx_id
+    low_limit_id
+    up_limit_id
+    ids
+    ...
+}
+```
 
-### 判断当前版本数据项是否可见规则
+**creator_trx_id** 创建这个ReadView的事务ID（系统最新的一个事务的ID）
 
-使用了 read_view_sees_trx_id函数，我们的read_view中保存了当前全局的事务的范围：
-`[up_limit_id，low_limit_id ]`
+**low_limit_id** 下限（时间&事务维度下限就是最大的那一个值） 所有事务ID大于或等于low_limit_id对当前事务都不可见
 
-**1. 当行记录的事务ID小于当前系统的最小活动id，就是可见的。**
-　　if (trx_id < view->up_limit_id) {
-　　　　return(TRUE);
-　　}
-**2. 当行记录的事务ID大于当前系统的最大活动id，就是不可见的。**
-　　if (trx_id >= view->low_limit_id) {
-　　　　return(FALSE);
-　　}
-**3. 当行记录的事务ID在活动范围之中时，判断是否在活动链表中，如果在就不可见，如果不在就是可见的。**
-　　for (i = 0; i < n_ids; i++) {
-　　　　trx_id_t view_trx_id
-　　　　　　= read_view_get_nth_trx_id(view, n_ids - i - 1);
-　　　　if (trx_id <= view_trx_id) {
-　　　　return(trx_id != view_trx_id);
-　　　　}
-　　}
+**up_limit_id** 上限（时间&事务维度下限就是最小的那一个值）所有事务ID严格小于up_limit_id的事务对当前事务可见
 
-## MVCC-查询规则
+**ids** 未提交的事务ID列表
 
-检验该行记录的当前数据`DB_TRX_ID数据行版本号`<=`当前事务版本号`，如果小于就直接返回数据，大于就根据 `DB_ROLL_PT 回滚指针`找到上一个版本数据（undo log）,继续判断版本，直到找到数据版本号<=当前事务版本号的数据返回 , 这样也就确保了读取到的数据是当前事务开始前已经存在的数据，或者是自身事务改变过的数据
+可见性判断的伪代码：
 
+```
+IsVisible(trx_id)
+    if (trx_id == creator_trx_id)     // 当前事务
+        return true;
+    else if (trx_id < up_limit_id)    // ReadView创建时, 事务已提交
+        return true;
+    else if (trx_id >= low_limit_id)  // ReadView创建时，事务还未被创建
+        return false;
+    else if (trx_id is in m_ids)  // ReadView创建时，事务正在执行，但未提交
+        return false
+    else                          // ReadView创建时, 事务已提交
+        return true;
+```
+
+## 快照数据
+
+事务的第一个DML语句执行时，会去建立当前表的数据的快照，该数据中可能包含了未提交的数据，**这些数据都有undo log 指针指向之前版本的数据**

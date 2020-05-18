@@ -18,7 +18,7 @@ mvn clean install -U
 
 * “\-”表示该包后面不再依赖其它jar包
 
-#### 查看部分依赖
+#### 查看部分依赖 
 
 ```
 mvn dependency:tree

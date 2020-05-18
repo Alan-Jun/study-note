@@ -480,3 +480,12 @@ public final Collection<Thread> getQueuedThreads() {
 }
 ```
 
+# 总结
+
+## 独占式获取
+
+![image-20200514162821136](assets/image-20200514162821136.png)
+
+## 独占式超时获取
+
+![image-20200514162951980](assets/image-20200514162951980.png)

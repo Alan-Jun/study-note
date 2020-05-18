@@ -223,6 +223,8 @@ public long sumThenReset() {
 
 ## Condition接口
 
+### 接口介绍
+
 | 接口                                                         | 描述                                                         |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | void await() throws InterruptedException;                    | 使当前线程进入wait状态，直到被通知signal()/signalAll()/中断，其中被signal，唤醒之后，要直到获取到该Condition关联的锁，才能从该方法返回 |
@@ -241,12 +243,143 @@ public long sumThenReset() {
 >
 > 抛出该 InterruptedException 的方法，如果那个线程的中断状态被设置过，这个异常的处理机制中会重置该线程的中断状态。也就是interrupted的值会被重置
 
-## object和JUC的Lock的监视器模型对比
+### 结构图
+
+![image-20200514165322785](assets/image-20200514165322785.png)
+
+### object和JUC的Lock的监视器模型对比
 
 | object       | juc                                                     |
 | ------------ | ------------------------------------------------------- |
 | 一个同步队列 | 一个同步队列                                            |
 | 一个等待队列 | 多个等待队列（因为可以newCondition()产生多个Condition） |
+
+### await()
+
+```java
+ public final void await() throws InterruptedException {
+            if (Thread.interrupted())
+                throw new InterruptedException();
+		     // 添加到等待队列尾部
+            Node node = addConditionWaiter();
+     		// 释放锁
+            int savedState = fullyRelease(node);
+            int interruptMode = 0;
+            while (!isOnSyncQueue(node)) {
+                // 进入等待状态，等待唤醒
+                LockSupport.park(this);
+                if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+                    break;
+            }
+            if (acquireQueued(node, savedState) && interruptMode != THROW_IE)
+                interruptMode = REINTERRUPT;
+            if (node.nextWaiter != null) // clean up if cancelled
+                unlinkCancelledWaiters();
+            if (interruptMode != 0)
+                reportInterruptAfterWait(interruptMode);
+        }
+```
+
+### awaitNanos
+
+```java
+public final long awaitNanos(long nanosTimeout)
+        throws InterruptedException {
+    if (Thread.interrupted())// 响应中断
+        throw new InterruptedException();
+    // 添加到等待队列尾部
+    Node node = addConditionWaiter();
+    long savedState = fullyRelease(node);
+    final long deadline = System.nanoTime() + nanosTimeout;
+    int interruptMode = 0;
+    while (!isOnSyncQueue(node)) {
+        if (nanosTimeout <= 0L) {
+            transferAfterCancelledWait(node);
+            break;
+        }
+        if (nanosTimeout >= spinForTimeoutThreshold)
+            LockSupport.parkNanos(this, nanosTimeout);
+        if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+            break;
+        nanosTimeout = deadline - System.nanoTime();
+    }
+    if (acquireQueued(node, savedState) && interruptMode != THROW_IE)
+        interruptMode = REINTERRUPT;
+    if (node.nextWaiter != null)
+        unlinkCancelledWaiters();
+    if (interruptMode != 0)
+        reportInterruptAfterWait(interruptMode);
+    return deadline - System.nanoTime();
+}
+```
+
+### signal()
+
+```java
+public final void signal() {
+    // 检查当前显示是获取锁的线程
+    if (!isHeldExclusively())
+        throw new IllegalMonitorStateException();
+    Node first = firstWaiter;
+    if (first != null)
+        doSignal(first);// 唤醒condition的等待队列中的第一个线程
+}
+
+private void doSignal(Node first) {
+    do {
+        if ( (firstWaiter = first.nextWaiter) == null)
+            lastWaiter = null;
+        first.nextWaiter = null;
+    } while (!transferForSignal(first) &&
+             (first = firstWaiter) != null);
+}
+
+final boolean transferForSignal(Node node) {
+    /*
+     * If cannot change waitStatus, the node has been cancelled.
+     */
+    // 首先将该节点condition节点修改成AQS的同步队列中的节点类型
+    if (!compareAndSetWaitStatus(node, Node.CONDITION, 0))
+        return false;
+
+    /*
+     * Splice onto queue and try to set waitStatus of predecessor to
+     * indicate that thread is (probably) waiting. If cancelled or
+     * attempt to set waitStatus fails, wake up to resync (in which
+     * case the waitStatus can be transiently and harmlessly wrong).
+     */
+    // 将节点加入到 同步队列的尾部，返回值p 是前置节点
+    Node p = enq(node);
+    int ws = p.waitStatus;
+    // 如果它的前置节点不是 SIGNAL 状态的，那么需要使用CAS尝试修改成这样的，因为当前节点需要前置节点通知唤醒，如果失败，那就直接唤醒当前线程节点
+    if (ws > 0 || !compareAndSetWaitStatus(p, ws, Node.SIGNAL))
+        LockSupport.unpark(node.thread);
+    return true;
+}
+
+```
+
+### signalAll()
+
+```java
+public final void signalAll() {
+    if (!isHeldExclusively())
+        throw new IllegalMonitorStateException();
+    Node first = firstWaiter;
+    if (first != null)
+        doSignalAll(first);
+}
+
+private void doSignalAll(Node first) {
+    lastWaiter = firstWaiter = null;
+    do {
+        Node next = first.nextWaiter;
+        first.nextWaiter = null;
+        transferForSignal(first);
+        first = next;
+    } while (first != null);
+}
+```
 
 ## LockSupport
 
@@ -301,7 +434,6 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
         final Thread current = Thread.currentThread();
         int c = getState();
         if (c == 0) {// 判断当前锁是否已被某线程获取
-            // 
             if (compareAndSetState(0, acquires)) {
                 setExclusiveOwnerThread(current);
                 return true;
@@ -478,7 +610,7 @@ static final class NonfairSync extends Sync {
         return false; // 非公平模式下，写锁总是抢占模式
     }
     final boolean readerShouldBlock() {
-        // 非公平模式下，读锁需要等待的情况只有，这时候等待的节点中国首届点是一个独占式的写锁节点
+        // 非公平模式下，读锁需要等待的情况只有，这时候等待的节点中首节点是一个独占式的写锁节点
         return apparentlyFirstQueuedIsExclusive();
     }
 }
@@ -513,11 +645,11 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
      */
 	
     static final int SHARED_SHIFT   = 16;
-    // 32 shared 单位，共享锁的技术单位。占用同步状态字段state的高16位，记录共享锁的被获取的数量，使用sharedCount方法获取共享锁的被获取的数量
+    // 2^16 :shared 单位，共享锁的技术单位。占用同步状态字段state的高于16位的位，记录共享锁的被获取的数量，使用sharedCount方法获取共享锁的被获取的数量
     static final int SHARED_UNIT    = (1 << SHARED_SHIFT);
-    // 31 最大数量 锁计数器读锁/写锁分别的最大持有锁数，写锁就是冲入次数限制，读锁就是获取锁的相乘数量+重入次数的总数限制
+    // 2^16-1 :最大数量 锁计数器读锁/写锁分别的最大持有锁数，写锁就是重入次数限制，读锁就是获取锁的相乘数量+重入次数的总数限制
     static final int MAX_COUNT      = (1 << SHARED_SHIFT) - 1;
-    // 31 低16位最为写锁的计数，由于写锁是独占锁，所以计数的目的是记录重入次数，使用exclusiveCount方法获取该数值
+    // 2^16-1 :低16位做为写锁的计数，由于写锁是独占锁，所以计数的目的是记录重入次数，使用exclusiveCount方法获取该数值
     static final int EXCLUSIVE_MASK = (1 << SHARED_SHIFT) - 1;
 
     /** 返回当前共享锁的被获取过的次数  */
@@ -543,12 +675,10 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
     }
   
     private transient ThreadLocalHoldCounter readHolds;
-	/**
-	 * 用于最一级的缓存
-	 */
+	
     private transient HoldCounter cachedHoldCounter;
 
-   	// 第一个都线程
+   	// 第一个read线程
     private transient Thread firstReader = null;
     private transient int firstReaderHoldCount;
 
@@ -867,4 +997,10 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
 
 ## StampedLock
 
-## CountDownLatc
+## CountDownLatch
+
+## CyclicBarrier
+
+## Semaphore
+
+## Exchanger
