@@ -1,12 +1,14 @@
 # Introduction
 
-基于数组结构，采用循环数组实现的
+基于数组结构，采用循环数组的方式实现的
 
 * **有界阻塞队列**
 * **按照FIFO（先进先出）原则对元素进行处理，**
 * **默认情况不保证线程公平访问队列**，构造函数`public ArrayBlockingQueue(int capacity, boolean fair)`fair 传入true**可以指定公平访问。**
 
 阻塞队列主要的使用方法主要是 `take`,`put`,`E poll(long timeout, TimeUnit unit) `,`boolean offer(E e, long timeout, TimeUnit unit)` 这样一些方法，其中 `E poll(long timeout, TimeUnit unit) ` 方法，是我们线程池实现，闲置线程回收的基石
+
+# queue主体代码
 
 ```java
 public class ArrayBlockingQueue<E> extends AbstractQueue<E>
@@ -115,7 +117,7 @@ private E dequeue() {
     }
 ```
 
-# E poll(long timeout, TimeUnit unit) `
+# E poll(long timeout, TimeUnit unit) 
 
 ```java
 public E poll(long timeout, TimeUnit unit) throws InterruptedException {
