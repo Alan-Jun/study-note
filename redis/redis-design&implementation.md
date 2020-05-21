@@ -245,7 +245,7 @@ typedef struct dictType{
 
 ![1571398900449](assets/1571398900449.png)
 
-**[copy-on-write](..\写时复制技术.md)**
+**[copy-on-write](..\计算机系统\写时复制技术.md)**
 
 ### 渐进式rehash
 

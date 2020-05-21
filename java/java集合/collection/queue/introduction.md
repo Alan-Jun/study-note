@@ -186,7 +186,7 @@ public E remove() {
 
 ## [LinkedBlockingQueue](BlockingQueue/LinkedBlockingQueue.md) 
 
-一个基于链表结构实现的 **可指定阈值的有界阻塞队列，按照FIFO（先进先出）原则对元素进行处理,吞吐量通常要高于`ArrayBlockingQueue`，队列的默认长度和最大长度都是`Integer.MAX_VALUE`**
+一个基于单链（只有next指针）链表结构实现的 **可指定阈值的有界阻塞队列，按照FIFO（先进先出）原则对元素进行处理,吞吐量通常要高于`ArrayBlockingQueue`，队列的默认长度和最大长度都是`Integer.MAX_VALUE`**
 
 ## [PriorityBlockingQueue](BlockingQueue/PriorityBlockingQueue.md) 
 

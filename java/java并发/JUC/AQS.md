@@ -460,6 +460,27 @@ private void doReleaseShared() {
             break;
     }
 }
+
+private void unparkSuccessor(Node node) {
+        /*
+         * If status is negative (i.e., possibly needing signal) try
+         * to clear in anticipation of signalling.  It is OK if this
+         * fails or if status is changed by waiting thread.
+         */
+        int ws = node.waitStatus;
+        if (ws < 0)
+            compareAndSetWaitStatus(node, ws, 0);
+	    //找到下一个需要唤醒的结点s
+        Node s = node.next;
+        if (s == null || s.waitStatus > 0) { //如果为空或已取消
+            s = null;
+            for (Node t = tail; t != null && t != node; t = t.prev) // 从后向前找。
+                if (t.waitStatus <= 0)// <=0的结点，都是还有效的结点。
+                    s = t;
+        }
+        if (s != null)
+            LockSupport.unpark(s.thread);
+    }
 ```
 
 ### getQueuedThreads

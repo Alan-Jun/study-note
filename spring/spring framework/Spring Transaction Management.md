@@ -77,8 +77,6 @@ public interface TransactionStatus extends SavepointManager, Flushable {
 }
 ```
 
-
-
 # 2. 接口实现类的选择
 
 在了解了上面的内容之后，我们知道那只是对应的接口，那么我们在使用中应该怎么去使用对应的实现类呢（当然你也可以基于spring的接口，自定义实现类）
