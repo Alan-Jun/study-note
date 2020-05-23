@@ -1751,3 +1751,15 @@ public class ExchangerTest {
 ```
 
 如果两个线程有一个没有执行exchange()方法，则会一直等待，如果担心有特殊情况发 生，避免一直等待，可以使用exchange（V x，longtimeout，TimeUnit unit）设置最大等待时长。
+
+```java
+@sun.misc.Contended static final class Node {
+    int index;              // Arena index
+    int bound;              // Last recorded value of Exchanger.bound 上次交换器所绑定的value
+    int collides;           // Number of CAS failures at current bound
+    int hash;               // Pseudo-random for spins 自旋伪所及hash
+    Object item;            // This thread's current item 
+    volatile Object match;  // Item provided by releasing thread
+    volatile Thread parked; // Set to this thread when parked, else null 停车....
+}
+```

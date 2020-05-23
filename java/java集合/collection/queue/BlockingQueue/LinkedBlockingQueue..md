@@ -1,5 +1,7 @@
 # Introduction
 
+![image-20200523134245874](assets/image-20200523134245874.png)
+
 一个基于单链（只有next指针）链表结构实现的 **可指定阈值的有界阻塞队列，按照FIFO（先进先出）原则对元素进行处理,吞吐量通常要高于`ArrayBlockingQueue`，队列的默认长度和最大长度都是`Integer.MAX_VALUE`**
 
 由于代码逻辑比较简单，这里节介绍一些主体的代码，以及take,put两个方法

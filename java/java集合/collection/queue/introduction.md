@@ -190,7 +190,7 @@ public E remove() {
 
 ## [PriorityBlockingQueue](BlockingQueue/PriorityBlockingQueue.md) 
 
-**一个支持优先级的无界阻塞队列**，默认情况下元素采取自然顺序，也可以自定义类实现`compareTo()`方法来指定元素的排序顺序。或则初始化该队列的时候（一般使用匿名内部类）指定构造参数`Comparator`来对元素进行排序。**不能保证同优先级元素的顺序**
+**一个支持优先级的无界阻塞队列**，默认情况下元素采取自然顺序，也可以自定义类实现`compareTo()`方法来指定元素的排序顺序。或则初始化该队列的时候（一般使用匿名内部类）指定构造参数`Comparator`来对元素进行排序。**不能保证同优先级元素的顺序,由于是无界的所以put不会被阻塞，使用无界队列在使用线程池的时候，最大线程数就是一个不会生效的值**
 
 ```java
 new PriorityBlockingQueue<Person>(10, new Comparator<Person>() {
