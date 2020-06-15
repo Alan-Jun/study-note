@@ -10,9 +10,9 @@
 
 # 底层数据结构
 
-## redis 为什么不适用 二叉查找树（红黑树），选择了跳跃表
+## redis 为什么不用 二叉查找树（红黑树），选择了跳跃表
 
-redis 作为一个面向`内存`构建的 缓存数据库系统，需要处理大量并发请求，要办证查询性能，并且数据量巨大。
+redis 作为一个面向`内存`构建的 缓存数据库系统，需要处理大量并发请求，要保证查询性能，并且数据量巨大。
 
 我们知道我们的二叉查找树要维持结构的平衡特性，在多次插入删除之后，为了维持平衡就需要做 rebalance（重平衡） 操作，这个操作执行时，树的节点越多，可能被波及到的节点也越多，完成平衡花费的代价就越大，相对来说跳跃表的维持平衡的局部波及的代价来说就小了很多。在redis这种大数据量，高性能的数据库场景就不是太适用。
 
@@ -98,6 +98,10 @@ redis为了确保可以适用于各种场景，`sds`的`api`都是二进制安�
 ![1568803100723](assets/1568803100723.png)
 
 ## 双端链表
+
+### 双端链表在redis种的应用、
+
+* redis 的 list 类型会使用到改结构
 
 ### 链表节点 ListNode
 
@@ -237,7 +241,7 @@ typedef struct dictType{
 
 ### rehash 
 
-扩容的时候操作和hashMap 的扩容基本一样，不过 redis没有树结构，而且有一点很特别的是，redis这里使用的是 [渐进式rehash](#渐进式rehash)
+扩容的时候操作和hashMap 的扩容基本一样，不过 redis没有树结构，而且有一点很特别的是，redis这里使用的是 [渐进式rehash](#渐进式rehash) 
 
 ### rehash扩容&缩容
 
@@ -249,7 +253,7 @@ typedef struct dictType{
 
 ### 渐进式rehash
 
-其中的rehash过程和java8的ConcurrenthashMap有点点类似,java8的ConcurrenthashMap也会在`添加`,`删除`,`更新`的时候利用当前的线程取帮助rehash
+其中的rehash过程和java8的ConcurrenthashMap有点点类似,java8的ConcurrenthashMap也会在`添加`,`删除`,`更新`的时候利用当前的线程去帮助rehash
 
 ![1571399163370](assets/1571399163370.png)
 
@@ -278,7 +282,7 @@ typedef struct dictType{
 ### 字典在redis中的应用
 
 * redis本身就是一个大的字典
-* 其次redis里卖弄的hash类型，也是字典
+* 其次redis里面的hash类型，也是字典
 * 
 
 ### 美团针对Redis ReHash机制的探索和实践
@@ -299,8 +303,8 @@ https://tech.meituan.com/2018/07/27/redis-rehash-practice-optimization.html
 
 ### 跳跃表在redis中的应用
 
-* 有序集合 sorted sets
-* 集群节点中用作内部数据结构
+* **有序集合 sorted sets**
+* **集群节点中用作内部数据结构**
 
 ### 数据结构图
 
@@ -322,7 +326,7 @@ https://tech.meituan.com/2018/07/27/redis-rehash-practice-optimization.html
 
 例如：我们只创建一个包含5个元素的集合键，并且集合中所有元素都是整数，那么这个集合 Set就是一个整数集合
 
-### 整数集合(inset)的实现
+### 整数集合(intset)的实现
 
 `intset`是redis用来保存整数值的集合抽象数据结构，它可以保存类型为`int16_t`, `int32_t`, `int64_t`的整数值并且保证集合中不会存在重复元素。
 
@@ -376,7 +380,7 @@ API :
 
 ![image-20200511151411408](assets/image-20200511151411408.png)
 
-# redisd对象（上层数据结构）
+# redis对象（上层数据结构）
 
 ## 对象的底层结构定义
 
@@ -425,7 +429,7 @@ typedef struct redisObject{
 
   相对非 embstr的来说，由于内存分配适合 redisObject陪配在一起的连续**内存，所以只需要分配一次**；**释放自然也是只需要一次操作了**；**保存在一块连续内存中意味着我们查找会更快一些**
 
-- [简单动态字符串](#简单动态字符串 sds)对象 ： redis 自定义的动态字符串结构 存储
+- [动态字符串](#简单动态字符串 sds)对象 ： redis 自定义的动态字符串结构 存储
 
   ![image-20200509163615280](assets/image-20200509163615280.png)
 

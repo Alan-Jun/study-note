@@ -398,7 +398,7 @@ private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
         Node<K,V> f; int fh;
 
         // 下面这个 while 真的是不好理解
-        // advance 为 true 表示可以进行下一个位置的迁移了
+        // advance 为 true 表示可以进行下一个stride的迁移了
         //   简单理解结局：i 指向了 transferIndex，bound 指向了 transferIndex-stride
         while (advance) {
             int nextIndex, nextBound;
@@ -449,8 +449,7 @@ private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
         }
         // 如果位置 i 处是空的，没有任何节点，那么放入刚刚初始化的 ForwardingNode ”空节点“
         else if ((f = tabAt(tab, i)) == null)
-            advance = casTabAt(tab, i, null, fwd);
-        // 该位置处是一个 ForwardingNode，代表该位置已经迁移过了
+            advance = casTabAt(tab, i, null, fwd);  // 该位置处是一个 ForwardingNode，代表该位置已经有线程在处理迁移
         else if ((fh = f.hash) == MOVED)
             advance = true; // already processed
         else {

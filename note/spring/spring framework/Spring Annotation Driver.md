@@ -14,7 +14,7 @@
 
   * `base-package=""`属性用来指定具体的包路径
 
-  * `scoped-proxy=""` 这个属性指定使用什么杨的动态代理方式来实现，取值：
+  * `scoped-proxy=""` 这个属性指定使用什么样的动态代理方式来实现，取值：
     * `interfaces` : 使用 jdk 的基于接口的动态代理
     * `targetClass` : 使用 cglib的基于类的方法拦截调用的动态代理
   * `name-generator=""`: 用于自定义命名规则的属性，1.4.1 节 会有介绍
@@ -188,7 +188,7 @@ public class ConfigyrationDemo {
 
 ## 1.5 @Scope
 
-[作用于类型](https://docs.spring.io/spring/docs/5.0.7.RELEASE/spring-framework-reference/core.html#beans-factory-scopes)
+[作用域类型](https://docs.spring.io/spring/docs/5.0.7.RELEASE/spring-framework-reference/core.html#beans-factory-scopes)
 
 ```java
 @Target({ElementType.TYPE, ElementType.METHOD})

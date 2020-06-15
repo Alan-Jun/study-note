@@ -1330,7 +1330,7 @@ public class CyclicBarrier {
     private Generation generation = new Generation();
 
     /**
-     * 用于计数，每有一个线程到达屏障 -1
+     * 用于计数，每有一个线程到达屏障 count-1
      */
     private int count;
 
@@ -1413,7 +1413,7 @@ private int dowait(boolean timed, long nanos)
                     if (!timed)// 没有设置超时的情况下直接使用 Condition的await方法，加入到等待队列
                         trip.await();
                     else if (nanos > 0L)
-                        nanos = trip.awaitNanos(nanos);// 使用超时的时候使用超时的await方法
+                        nanos = trip.awaitNanos(nanos);// 使用超时的时候Condition使用超时的await方法
                 } catch (InterruptedException ie) {
                     if (g == generation && ! g.broken) {
                         breakBarrier();// 发生异常，标识屏障被破坏，通知所有屏障处等待的线程

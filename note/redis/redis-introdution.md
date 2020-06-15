@@ -213,7 +213,7 @@ pattern：`del key [key....] `
 set command :
 
 * 如果 `key` 持有了`value`,  那么那么会覆盖掉旧的值，**无视类型**
-* 如果`key`带有生存时间（TTL），那么原有的 TTL 将会被清楚
+* 如果`key`带有生存时间（TTL），那么原有的 TTL 将会被清除
 
 **未设置生存时间的key会在redis的数据淘汰机制中清理，这个机制可配置**
 
@@ -571,15 +571,81 @@ OK
 
 ### SETBIT
 
+SETBIT key offset value
+
+可以进行位操作
+
+> **起始版本：2.2.0**
+>
+> **时间复杂度：**O(1)
+
+#### 返回值
+
+在offset处原来的bit值
+
+#### 示例代码
+
+```
+127.0.0.1:6379> setbit test 2 1
+(integer) 0
+127.0.0.1:6379> getbit test 0
+(integer) 0
+127.0.0.1:6379> getbit test 2
+(integer) 1
+```
+
 ### GETBIT
+
+GETBIT key  offset 
+
+> **起始版本：2.2.0**
+>
+> **时间复杂度：**O(1)
+
+#### 返回值
+
+在offset处的bit值
+
+#### 示例代码
+
+```
+127.0.0.1:6379> setbit test 2 1
+(integer) 0
+127.0.0.1:6379> getbit test 0
+(integer) 0
+127.0.0.1:6379> getbit test 2
+(integer) 1
+```
 
 ### BITOP
 
+BITOP operation destkey key [key ...]
+
+可以进行位运算
+
+> **起始版本：2.6.0**
+>
+> **时间复杂度：**O(N)
+
+http://www.redis.cn/commands/bitop.html
+
+#### 返回值
+
+#### 示例代码
+
 ### BITPOS
+
+> **起始版本：2.8.7**
+>
+> **时间复杂度：**O(N)
 
 ### BITCOUNT
 
+http://www.redis.cn/commands/bitcount.html
+
 ### BITFIELD
+
+#### 
 
 
 

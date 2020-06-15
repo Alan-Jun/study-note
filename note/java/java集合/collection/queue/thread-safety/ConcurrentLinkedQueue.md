@@ -2,10 +2,10 @@
 
 * 是一个基于**链表结构**以及**非阻塞算法（CAS）**实现的线程安全队列
 
-* **具有 head , tail 两个指针，所以这是一个环形链表**
+* **具有 head , tail 两个指针，是一个环形链表**
 * **容量不受限制（只受实际可用内存大小的限制，使用不当容易导致OOM）**
 * **不允许 NULL 值**
-* **size是通过遍历链表的计算来的，所以时间复杂度是O(N)**
+* **size是通过遍历链表计算来的，所以时间复杂度是O(N)**
 
 # 源码分析
 
@@ -29,7 +29,7 @@ private static class Node<E> {
     boolean casItem(E cmp, E val) {
         return UNSAFE.compareAndSwapObject(this, itemOffset, cmp, val);
     }
-	// 设置当前节点的 next 指针
+	// 设置当前节点的 next 指针 lazy 模式无法保证 volatile的线程间可见性
     void lazySetNext(Node<E> val) {
         UNSAFE.putOrderedObject(this, nextOffset, val);
     }

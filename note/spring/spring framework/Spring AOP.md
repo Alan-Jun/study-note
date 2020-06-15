@@ -41,7 +41,7 @@
 
   * `around advice`: 围绕`JoinPoint`的`Advice`。这是最有力的`Advice`。`around advice`可以在方法调用之前和之后执行自定义行为。**建议使用下面的特定类型的`Advice`,在必要情况下 在使用 `around advice` 因为做同样的事使用最具体的 `Advice`类型可以提供最简单的编程模型，减少错误出现的可能性**
   * `before advice`: 在`JoinPoint`之前执行但不能阻止执行流程进入`JoinPoint`的`Advice`（除非它(`Advice`)抛出异常）。 
-  * `after returning advice`: 在`JionPoint`正常完成后执行的*建议`Advice`
+  * `after returning advice`: 在`JionPoint`正常完成后执行的Advice`
   * `after throwing advice`: 如果方法是抛出异常退出，则执行 `Advice`
   * `after (finally) advice`: 无论`JoinPoint`退出的方式（正常或异常返回），都要执行`Advice` 
 
@@ -76,7 +76,7 @@
 * Spring AOP 默认使用AOP代理的标准 `JDK 动态代理`。这使得任何接口（或接口集）都可以被代理。 
 * Spring AOP也可以使用`CGLIB`代理。这是代理类而不是接口所必需的。如果业务对象未实现接口，则默认使用CGLIB。 
 
-# 6.spring 具体的使用方式
+# 6.spring AOP具体的使用方式
 
 在spring 中 我们使用aop 主要也分为xml配置的方式和使用注解的方式。
 
@@ -207,7 +207,9 @@ execution( modifiers-pattern? ret-type-pattern declaring-type-pattern?name-patte
 
 从正则表达式中我们可以看出 `ret-type-pattern` ， `name-pattern` ，`param-pattern` 是必须的
 
-`ret-type-pattern`:标识方法的返回值，需要使用全路径的类名如java.lang.String,也可以为*表示任何返回值； 　　　　
+`ret-type-pattern`:标识方法的返回值，需要使用全路径的类名如java.lang.String,也可以为*表示任何返回值； 
+
+`declaring-type-pattern`:　类路径
 
 `name-pattern`:指定方法名, *  代表所有方法 ,  set* , 代表以set开头的所有方法. 　　　　
 
@@ -895,6 +897,8 @@ public class AopByAnnotationTest extends UnitTestBase {
 
 #### `如何给`advice`传参数` 以及 argNames
 
+更多请看 https://docs.spring.io/spring/docs/5.2.6.RELEASE/spring-framework-reference/core.html#aop-ataspectj-advice-params
+
 **将待织入的方法参数传递给advice, 如果在args表达式(6.2.3 中还有别的表达式也可以)中使用参数名称代替类型名称，则在调用`advice`时，相应参数的值将作为参数值传递。** 我们看一个例子
 
 advice
@@ -1148,7 +1152,61 @@ public class AopByAnnotationTest extends UnitTestBase {
 
 这个主要是在事务管理中使用，` aspect`可以配置多个`advice`,  `advisor` 配置配置一个`advice`并且对应一个`PointCut`
 
-# 6.6 spring AOP API
+## 6.6 advice order
+
+官网的解释 https://docs.spring.io/spring/docs/5.2.6.RELEASE/spring-framework-reference/core.html#aop-ataspectj-advice-ordering
+
+说的是如果同一个 Join Point 有两个 aspect 的 advice 的话，可以使用 @Order 来指定顺序（或则实现 	org.springframework.core.Ordered 接口），数值越小优先级越高
+
+如果多个 advice 来自同一个 aspect 那么顺序无法确定，官方建议 将两个合成一个，或则拆分到另一个aspect 中 然后使用 @Order 排序
+
+其实就是关于优先级，before 类型的advice 优先级越高越先执行， after的优先级越高 越晚执行
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## 6.7 spring AOP API
 
 这事Spring AOP 的基础。https://docs.spring.io/spring/docs/5.0.7.RELEASE/spring-framework-reference/core.html#aop-api  有需要的时候请仔细阅读 官文的这部分内容
 

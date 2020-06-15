@@ -1,3 +1,10 @@
-- TreeSet：基于红黑树实现，支持有序性操作，例如根据一个范围查找元素的操作。但是查找效率不如 HashSet，HashSet 查找的时间复杂度为 O(1)，TreeSet 则为 O(logN)。
-- HashSet：基于哈希表实现，支持快速查找，但不支持有序性操作。并且失去了元素的插入顺序信息，也就是说使用 Iterator 遍历 HashSet 得到的结果是不确定的。
+非线程安全类
+
+- TreeSet：底层是[TreeMap](../../map/non-thread-safety/TreeMap.md)
+- HashSet：底层是[hashMap](../../map/non-thread-safety/HashMap.md)
 - LinkedHashSet：具有 HashSet 的查找效率，并且内部使用双向链表维护元素的插入顺序。
+
+线程安全类
+
+- CopyOnWriteArraySet : 底层是[CopyOnWriteArrayList](../list/thread-safety/CopyOnWriteArrayList.md)
+- ConcurrentSkipListSet : 底层是[ConcurrentSkipListMap](../../map/thread-safety/ConcurrentSkipListMap.md)

@@ -32,6 +32,7 @@ public interface PlatformTransactionManager {
 
 ```java
 public interface TransactionDefinition {
+    // 事务传播行为
     int PROPAGATION_REQUIRED = 0;
     int PROPAGATION_SUPPORTS = 1;
     int PROPAGATION_MANDATORY = 2;
@@ -39,11 +40,12 @@ public interface TransactionDefinition {
     int PROPAGATION_NOT_SUPPORTED = 4;
     int PROPAGATION_NEVER = 5;
     int PROPAGATION_NESTED = 6;
+    // 隔离级别
     int ISOLATION_DEFAULT = -1;
-    int ISOLATION_READ_UNCOMMITTED = 1;
-    int ISOLATION_READ_COMMITTED = 2;
-    int ISOLATION_REPEATABLE_READ = 4;
-    int ISOLATION_SERIALIZABLE = 8;
+    int ISOLATION_READ_UNCOMMITTED = 1;// read uncommit
+    int ISOLATION_READ_COMMITTED = 2;/// read commit
+    int ISOLATION_REPEATABLE_READ = 4;// repeatable read
+    int ISOLATION_SERIALIZABLE = 8;// serializable
     int TIMEOUT_DEFAULT = -1;
 
     int getPropagationBehavior();
@@ -62,20 +64,29 @@ public interface TransactionDefinition {
 * `TransactionStatus`：为事务代码提供了一种简单的方法来控制事务执行以及查询事务的状态。它们对于所有事务`API`都是通用的：
 
 ```java
-public interface TransactionStatus extends SavepointManager, Flushable {
+public interface TransactionStatus extends TransactionExecution, SavepointManager, Flushable {
+
+    @Override
     boolean isNewTransaction();// 是否是一个新的事务
 
     boolean hasSavepoint();// 是否有保存点
-
-    void setRollbackOnly();// 
-
+	
+    // 将一个事务标识为不可提交的。在调用完setRollbackOnly()后只能被回滚，在大多数情况下，事务管理器会检测到这一点，在它发现事务要提交时会立刻结束事务。
+    // 调用完setRollbackOnly()后，数据库可以继续执行select，但不允许执行update语句，因为事务只可以进行读取操作，任何修改都不会被提交。
+    @Override
+    void setRollbackOnly();
+	// setRollbackOnly() 执行后 这个isRollbackOnly()方法会fanhuitrue
+    @Override
     boolean isRollbackOnly();
 
     void flush();
 
+    @Override
     boolean isCompleted();// 事务是否完成
 }
 ```
+
+`void setRollbackOnly()` 方法的作用可以看[PROPAGATION_NESTED的demo的验证防范3](#3.2.3.3 外层方法开启事务的情况下)
 
 # 2. 接口实现类的选择
 
@@ -118,15 +129,15 @@ public interface TransactionStatus extends SavepointManager, Flushable {
 | 事务传播行为类型      | 说明                                                         |
 | --------------------- | ------------------------------------------------------------ |
 | PROPAGATION_REQUIRED  | 1.  在外围方法未开启事务的情况下`Propagation.REQUIRED`修饰的内部方法会使用自己的事务，且事务相互独立，互不干扰。<br/>2. 在外围方法开启事务的情况下`Propagation.REQUIRED`修饰的内部方法会加入到外围方法的事务中，所有`Propagation.REQUIRED`修饰的内部方法和外围方法均属于同一事务，只要一个方法异常，整个事务均回滚 |
-| PROPAGATION_SUPPORTS  | 1.  在外围方法未开启事务的情况下，`Propagation.SUPPORTS`修饰的方法，以非事务的方式执行<br/>2. 在外围方法开启事务的情况下`Propagation.SUPPORTS`修饰的内部方法会加入到外围方法的事务中，所有`Propagation.SUPPORTS`修饰的内部方法和外围方法均属于同一事务，只要一个方法异常，整个事务均回滚<br/>也就是说完全以外围方法为主 |
+| PROPAGATION_SUPPORTS  | 1. 在外围方法未开启事务的情况下，`Propagation.SUPPORTS`修饰的方法，以非事务的方式执行<br/>2. 在外围方法开启事务的情况下`Propagation.SUPPORTS`修饰的内部方法会加入到外围方法的事务中，所有`Propagation.SUPPORTS`修饰的内部方法和外围方法均属于同一事务，只要一个方法异常，整个事务均回滚<br/>也就是说完全以外围方法为主 |
 | PROPAGATION_MANDATORY | 1.  如果当前没有事务，就抛出异常。<br/>2.  同上              |
 
 * 第二类：被这一类修饰的方法不管外围方法是否有事务，都开启自己的独立的事务，且内部方法之间、内部方法和外部方法事务均相互独立，互不干扰。
 
 | 事务传播行为类型          | 说明                                                         |
 | ------------------------- | ------------------------------------------------------------ |
-| PROPAGATION_REQUIRES_NEW  | 不管外围方法是否开启事务，`Propagation.REQUIRES_NEW`修饰的内部方法都会单独开启自己的独立事务，且与外部方法事务也独立，内部方法之间、内部方法和外部方法事务均相互独立，互不干扰。 |
-| PROPAGATION_NOT_SUPPORTED | 不管外围方法是否开启事务都以非事务方式执行操作               |
+| PROPAGATION_REQUIRES_NEW  | 不管外围方法是否开启事务，`Propagation.REQUIRES_NEW`修饰的内部方法都会单独开启自己的独立事务，且与外部方法事务独立，内部方法之间、内部方法和外部方法事务均相互独立，互不干扰。 |
+| PROPAGATION_NOT_SUPPORTED | 不管外围方法是否开启事务都以非事务方式执行操作（也就是不支持事务） |
 | PROPAGATION_NEVER         | 以非事务方式执行<br/>如果外围方法存在事务，则抛出异常。      |
 * 第三类：
 
@@ -138,12 +149,12 @@ public interface TransactionStatus extends SavepointManager, Flushable {
 
 **下面我们主要看一下每一类的第一种类型的详细介绍，别的都相似，可以自己去测试**
 
-### PROPAGATION_REQUIRED
+### 3.2.1 PROPAGATION_REQUIRED
 
 * 在外围方法未开启事务的情况下`Propagation.REQUIRED`修饰的内部方法会使用自己的事务，且事务相互独立，互不干扰。
 * 在外围方法开启事务的情况下`Propagation.REQUIRED`修饰的内部方法会加入到外围方法的事务中，所有`Propagation.REQUIRED`修饰的内部方法和外围方法均属于同一事务，只要一个方法异常，整个事务均回滚
 
-#### 前置条件
+#### 3.2.1.1 前置代码
 
 **请不要太过在意这个的事务类的结构定义，只是为了测试**
 
@@ -203,7 +214,7 @@ public class TestDemoAllByAnnotation {
 
 
 
-#### 外层方法没有事务的情况下：
+#### 3.2.1.2 外层方法没有事务的情况下
 
 验证方法1：
 
@@ -265,7 +276,7 @@ public class AccountServiceImp implements AccountService {
 
 **结论：通过这两个方法我们证明了在外围方法未开启事务的情况下`Propagation.REQUIRED`修饰的内部方法会使用自己的事务，且事务相互独立，互不干扰。。**
 
-#### 外层方法开启事务的情况下：
+#### 3.2.1.3 外层方法开启事务的情况下
 
 验证方法1：外层方法异常
 
@@ -358,11 +369,11 @@ public class AccountServiceImp implements AccountService {
 
 **结论：以上试验结果我们证明在外围方法开启事务的情况下Propagation.REQUIRED修饰的内部方法会加入到外围方法的事务中，所有Propagation.REQUIRED修饰的内部方法和外围方法均属于同一事务，只要一个方法异常，整个事务均回滚。**
 
-### PROPAGATION_REQUIRES_NEW
+### 3.2.2 PROPAGATION_REQUIRES_NEW
 
 * 不管外围方法是否开启事务，`Propagation.REQUIRES_NEW`修饰的内部方法都会单独开启自己的独立事务，且与外部方法事务也独立，内部方法之间、内部方法和外部方法事务均相互独立，互不干扰。
 
-#### 前置条件
+#### 3.2.2.1 前置代码
 
 Repository 层的方法：我们给相应的方法都加上 `PROPAGATION_REQUIRES_NEW`
 
@@ -399,7 +410,7 @@ public class AccounDaoImp implements AccountDao {
 
 
 
-#### 外层方法没有事务的情况下：
+#### 3.2.2.2 外层方法没有事务的情况下
 
 验证方法1：
 
@@ -459,7 +470,7 @@ public class AccountServiceImp implements AccountService {
 
 **结论：通过这两个方法我们证明了在外围方法未开启事务的情况下`Propagation.REQUIRES_NEW`修饰的内部方法会使用自己的事务，且事务相互独立，互不干扰。。**
 
-#### 外层方法开启事务的情况下：
+#### 3.2.2.3 外层方法开启事务的情况下
 
 验证方法1：外层方法异常
 
@@ -550,12 +561,12 @@ public class AccountServiceImp implements AccountService {
 
 **结论：在外围方法开启事务的情况下Propagation.REQUIRES_NEW修饰的内部方法依然会单独开启独立事务，且与外部方法事务也独立，内部方法之间、内部方法和外部方法事务均相互独立，互不干扰。**
 
-### PROPAGATION_NESTED
+### 3.2.3 PROPAGATION_NESTED
 
 * 如果外围方法存在事务，`Propagation.NESTED`修饰的内部方法属于外部事务的子事务，外围主事务回滚，子事务一定回滚，而内部子事务可以单独回滚（例子见下文）而不影响外围主事务和其他子事务
 * 如果外围方法没有事务，则执行与PROPAGATION_REQUIRED类似的效果。
 
-#### 前置条件
+#### 3.2.3.1 前置代码
 
 Repository 层的方法：我们给相应的方法都加上 `PROPAGATION_REQUIRES_NEW`
 
@@ -592,7 +603,11 @@ public class AccounDaoImp implements AccountDao {
 
 
 
-#### 外层方法没有事务的情况下：
+#### 3.2.3.3 外层方法开启事务的情况下3.2.3.2 外层方法没有事务的情况下
+
+| 事务传播行为类型   | 说明                                                         |
+| ------------------ | ------------------------------------------------------------ |
+| PROPAGATION_NESTED | 1.如果外围方法存在事务，`Propagation.NESTED`修饰的内部方法属于外部事务的子事务，外围主事务回滚，子事务一定回滚，而内部子事务可以单独回滚（[详细实例](#PROPAGATION_NESTED)）而不影响外围主事务和其他子事务<br/>2.如果外围方法没有事务，则执行与PROPAGATION_REQUIRED类似的效果。 |
 
 验证方法1：
 
@@ -618,6 +633,14 @@ public class AccountServiceImp implements AccountService {
 }
 ```
 
+**执行方法前的数据都是一样的**
+
+执行方法1的结果：
+
+![1542073652363](assets/1542073652363.png)
+
+**证明内层方法的事务不会受到外层的影响**
+
 验证方法2：
 
 ```java
@@ -636,12 +659,6 @@ public class AccountServiceImp implements AccountService {
 }
 ```
 
-**执行方法前的数据都是一样的**
-
-执行方法1的结果：
-
-![1542073652363](assets/1542073652363.png)
-
 **两个方法正常执行，并且事务被提交**
 
 执行方法2的结果：
@@ -652,9 +669,9 @@ public class AccountServiceImp implements AccountService {
 
 **结论：通过这两个方法我们证明了在外围方法未开启事务的情况下`Propagation.NESTED`和`Propagation.REQUIRED`作用相同，修饰的内部方法会使用自己的事务，且事务相互独立，互不干扰。。**
 
-#### 外层方法开启事务的情况下：
+#### 3.2.3.3 外层方法开启事务的情况下
 
-验证方法1：外层方法异常
+**验证方法1**：外层方法异常
 
 ```java
 @Service("accountService")
@@ -673,7 +690,13 @@ public class AccountServiceImp implements AccountService {
 }
 ```
 
-验证方法2：内层方法异常
+执行方法1的结果：
+
+![1542073652363](assets/1542074660108.png)
+
+**外部方法异常回滚，内部方法也全部回滚**
+
+**验证方法2**：内层方法异常
 
 ```java
 @Service("accountService")
@@ -691,7 +714,13 @@ public class AccountServiceImp implements AccountService {
 }
 ```
 
-验证方法3：内层方法异常，外层捕获异常
+执行方法2的结果：
+
+![1542073851874](assets/1542074660108.png)
+
+**抛出异常的方法的事务回滚了，由于外部方法没有捕获该内部方法异常，所以全部回滚了**
+
+**验证方法3**：内层方法异常，外层捕获异常
 
 ```java
 @Service("accountService")
@@ -713,7 +742,27 @@ public class AccountServiceImp implements AccountService {
 
 ```
 
-验证方法4：内层方法异常，外层捕获异常
+执行方法3的结果：
+
+![1542074660108](assets/1542073851874.png)
+
+控制台输出：
+
+```
+----------------- 捕获到异常 ------------------
+```
+
+**内部方法异常被外部方法正常捕获**
+
+**抛出异常的方法的事务回滚了**
+
+**如果此时我们希望外部的方法在捕获内部方法异常后，能够感知这个异常去做回滚可以在catch中使用下面这段代码**
+
+```
+TransactionAspectSupport.currentTransactionStatus().setRollbackOnly(); 
+```
+
+**验证方法4**：内层方法异常，外层捕获异常
 
 ```java
 @Service("accountService")
@@ -735,32 +784,6 @@ public class AccountServiceImp implements AccountService {
     }
 }
 ```
-
-执行方法1的结果：
-
-![1542073652363](assets/1542074660108.png)
-
-**外部方法异常回滚，内部方法也全部回滚**
-
-执行方法2的结果：
-
-![1542073851874](assets/1542074660108.png)
-
-**抛出异常的方法的事务回滚了，由于外部方法没有捕获该内部方法异常，所以全部回滚了**
-
-执行方法3的结果：
-
-![1542074660108](assets/1542073851874.png)
-
-控制台输出：
-
-```
------------------ 捕获到异常 ------------------
-```
-
-**内部方法异常被外部方法正常捕获**
-
-**抛出异常的方法的事务回滚了**
 
 执行方法4的结果：
 

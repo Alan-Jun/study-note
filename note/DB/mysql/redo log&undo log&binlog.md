@@ -81,7 +81,7 @@ binlog的格式也有三种：STATEMENT、ROW、MIXED 。
 **MySQL 支持用户自定义在 commit 时如何将 log buffer 中的日志刷 log file 中**。这种控制通过变量 `innodb_flush_log_at_trx_commit` 的值来决定。该变量有3种值：0、1、2，默认为 1。但注意，这个变量只是控制 commit 动作是否刷新 log buffer 到磁盘。
 
 - 当设置为 1 的时候，事务每次提交都会将 log buffer 中的日志写入 os buffer 并调用 `fsync()`刷到 log file on disk中。这种方式即使系统崩溃也不会丢失任何数据，但是因为每次提交都写入磁盘，IO 的性能较差。
-- 当设置为 0 的时候，事务提交时不会将 log buffer 中日志写入到 os buffer，而是每秒写入 os buffer 并调用`fsync()`写入到 log file on disk 中。也就是说设置为 0 时是(大约)每秒刷新写入到磁盘中的，当系统崩溃，会丢失 1 秒钟的数据。
+- 当设置为 0 的时候，事务提交时不会将 log buffer 中日志写入到 os buffer，而是每秒写入 os buffer 并调用`fsync()`写入到 log file on disk 中。也就是说设置为 0 时是(大约)每秒刷新写入到磁盘中，当系统崩溃，会丢失 1 秒钟的数据。
 - 当设置为 2 的时候，每次提交都仅写入到 os buffer，然后是每秒调用 fsync() 将 os buffer 中的日志写入到 log file on disk。
 
 在主从复制结构中，要保证事务的持久性和一致性，需要对日志相关变量设置为如下：

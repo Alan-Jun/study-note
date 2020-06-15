@@ -10,11 +10,19 @@
   
   2. 对请求进行过滤  
   
+     * 普通过滤器
+  
+       某些业务场景，比如机票查询，需要用到出发城市到达城市，如果你传一个不存在的城市，这就会造成缓存穿透，然后我们当前的场景，中国总共才600多个城市，有机场的更是没有多少，由于数据量少，过滤逻辑简单那么我们就可以简单的使用城市的code来做一个map简单过滤器。map中查询不到的就直接返回
+  
      * bitmap/roaringBitmap  
-  
+     
        > [bitmap&roaringBitMap](../algorithm/bitmap&roaringBitMap.md)
-  
+     
      * 布隆过滤器
+     
+       https://zhuanlan.zhihu.com/p/43263751
+     
+       https://cloud.tencent.com/developer/article/1136056
 
 #### 缓存过期
 
