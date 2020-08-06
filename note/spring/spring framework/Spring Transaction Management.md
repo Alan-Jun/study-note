@@ -41,19 +41,19 @@ public interface TransactionDefinition {
     int PROPAGATION_NEVER = 5;
     int PROPAGATION_NESTED = 6;
     // 隔离级别
-    int ISOLATION_DEFAULT = -1;
+    int ISOLATION_DEFAULT = -1;// 数据库级别是什么这个就是什么
     int ISOLATION_READ_UNCOMMITTED = 1;// read uncommit
     int ISOLATION_READ_COMMITTED = 2;/// read commit
     int ISOLATION_REPEATABLE_READ = 4;// repeatable read
     int ISOLATION_SERIALIZABLE = 8;// serializable
     int TIMEOUT_DEFAULT = -1;
-
+	// 获取事务的传播属性
     int getPropagationBehavior();
-
+	// 获取事务的隔离级别
     int getIsolationLevel();
-
+    //
     int getTimeout();
-
+    // 判断是否是只读
     boolean isReadOnly();
 
     @Nullable
@@ -141,9 +141,9 @@ public interface TransactionStatus extends TransactionExecution, SavepointManage
 | PROPAGATION_NEVER         | 以非事务方式执行<br/>如果外围方法存在事务，则抛出异常。      |
 * 第三类：
 
-| 事务传播行为类型          | 说明                                                         |
-| ------------------------- | ------------------------------------------------------------ |
-| PROPAGATION_NESTED        | 1.如果外围方法存在事务，`Propagation.NESTED`修饰的内部方法属于外部事务的子事务，外围主事务回滚，子事务一定回滚，而内部子事务可以单独回滚（[详细实例](#PROPAGATION_NESTED)）而不影响外围主事务和其他子事务<br/>2.如果外围方法没有事务，则执行与PROPAGATION_REQUIRED类似的效果。 |
+| 事务传播行为类型   | 说明                                                         |
+| ------------------ | ------------------------------------------------------------ |
+| PROPAGATION_NESTED | 1.如果外围方法存在事务，`Propagation.NESTED`修饰的内部方法属于外部事务的子事务，外围主事务回滚，子事务一定回滚，而内部子事务可以单独回滚（[详细实例](#3.2.3 PROPAGATION_NESTED)）而不影响外围主事务和其他子事务（前提是单独try-catch这个子事务。且不设置`TransactionAspectSupport.currentTransactionStatus().setRollbackOnly(); `）<br/>2.如果外围方法没有事务，则执行与PROPAGATION_REQUIRED类似的效果。 |
 
 **事务的传播行为，主要看内层方法的事务传播行为是什么样的，它决定了怎么去传播**
 
@@ -564,7 +564,10 @@ public class AccountServiceImp implements AccountService {
 ### 3.2.3 PROPAGATION_NESTED
 
 * 如果外围方法存在事务，`Propagation.NESTED`修饰的内部方法属于外部事务的子事务，外围主事务回滚，子事务一定回滚，而内部子事务可以单独回滚（例子见下文）而不影响外围主事务和其他子事务
+
 * 如果外围方法没有事务，则执行与PROPAGATION_REQUIRED类似的效果。
+
+  > 也可以看看这个 https://www.jianshu.com/p/f89771cae115
 
 #### 3.2.3.1 前置代码
 
@@ -603,7 +606,7 @@ public class AccounDaoImp implements AccountDao {
 
 
 
-#### 3.2.3.3 外层方法开启事务的情况下3.2.3.2 外层方法没有事务的情况下
+#### 3.2.3.2 外层方法没有事务的情况下
 
 | 事务传播行为类型   | 说明                                                         |
 | ------------------ | ------------------------------------------------------------ |
@@ -803,7 +806,7 @@ public class AccountServiceImp implements AccountService {
 
 
 
-**结论：以上试验结果我们证明在外围方法开启事务的情况下`Propagation.NESTED`修饰的内部方法属于外部事务的子事务，外围主事务回滚，子事务一定回滚，而内部子事务可以单独回滚而不影响外围主事务和其他子事务**。
+**结论：以上试验结果我们证明在外围方法开启事务的情况下`Propagation.NESTED`修饰的内部方法属于外部事务的子事务，外围主事务回滚，子事务一定回滚，而内部子事务可以单独回滚而不影响外围主事务和其他子事务（前提是单独try-catch这个子事务。且不设置 `TransactionAspectSupport.currentTransactionStatus().setRollbackOnly(); `）**。
 
 # 4. 声明式事务管理
 
@@ -1165,3 +1168,5 @@ public class TestDemoAllByAnnotation {
 
 
 更多内容可以查看spring官网的详情：https://docs.spring.io/spring/docs/5.1.2.RELEASE/spring-framework-reference/data-access.html#transaction-declarative-annotations
+
+> https://www.jianshu.com/p/7c6d4dbbe8fc

@@ -77,3 +77,83 @@ public class Java8Tester {
 }
 ```
 
+## sorted
+
+https://www.cnblogs.com/kuanglongblogs/p/11230250.html
+
+// order by id,age desc
+
+```java
+package com.kinson.stream;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+public class SortedDemo {
+
+    public static void main(String[] args) {
+        ArrayList<Student> students = new ArrayList<>(8);
+        Student student = new Student(1,28);
+        Student student1 = new Student(1,24);
+
+        Student student2 = new Student(3,27);
+        Student student3 = new Student(3,23);
+
+        Student student4 = new Student(4,31);
+        Student student5 = new Student(4,25);
+        Student student6 = new Student(4,20);
+
+        students.add(student4);
+        students.add(student6);
+        students.add(student5);
+        students.add(student2);
+        students.add(student3);
+        students.add(student);
+        students.add(student1);
+        // order by id,age desc
+        List<Student> collect = students.stream().sorted(Comparator.comparingInt(Student::getId).thenComparing(Student::getAge,Comparator.reverseOrder())).collect(Collectors.toList());
+        System.out.println(collect);
+    }
+
+
+}
+
+class Student{
+
+    private int id;
+
+    private int age;
+
+    public Student(int id, int age) {
+        this.id = id;
+        this.age = age;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public int getAge() {
+        return age;
+    }
+
+    public void setAge(int age) {
+        this.age = age;
+    }
+
+    @Override
+    public String toString() {
+        return "Student{" +
+                "id=" + id +
+                ", age=" + age +
+                '}';
+    }
+}
+```

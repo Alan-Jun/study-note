@@ -213,4 +213,4 @@ ArrayBlockingQueue 可以采用双锁实现吗？ 答案是可以，如果采用
 
 1. 代码复杂度
 2. count需要使用AtomicInteger 实现，也就是 volatile + CAS 自旋 ，这个会有性能损耗
-3. take 的时候要使用notFull.Singal唤醒 put操作被等待的线程的时候，需要先去获取putlock，同理put操作也是类似的，再看我们的同步队列使用场景，是生产消费模型，take 需要获取 putLock, put 需要 获取takeLock,生产消费线程数量越接近相等的情况，那么相互竞争锁的程度会越来越激烈，那么该实现相对于原来的实现，性能提升效果也就越不明显。
+3. take 的时候要使用notFull.Singall唤醒 put操作被等待的线程的时候，需要先去获取putlock，同理put操作也是类似的，再看我们的同步队列使用场景，是生产消费模型，take 需要获取 putLock, put 需要 获取takeLock,生产消费线程数量越接近相等的情况，那么相互竞争锁的程度会越来越激烈，那么该实现相对于原来的实现，性能提升效果也就越不明显。

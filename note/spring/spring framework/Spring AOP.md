@@ -207,6 +207,8 @@ execution( modifiers-pattern? ret-type-pattern declaring-type-pattern?name-patte
 
 从正则表达式中我们可以看出 `ret-type-pattern` ， `name-pattern` ，`param-pattern` 是必须的
 
+`modifiers-pattern`: 描述访问控制符 比如 `public`.....
+
 `ret-type-pattern`:标识方法的返回值，需要使用全路径的类名如java.lang.String,也可以为*表示任何返回值； 
 
 `declaring-type-pattern`:　类路径
@@ -214,8 +216,6 @@ execution( modifiers-pattern? ret-type-pattern declaring-type-pattern?name-patte
 `name-pattern`:指定方法名, *  代表所有方法 ,  set* , 代表以set开头的所有方法. 　　　　
 
 `param-pattern`:指定方法参数(声明的类型) , (..)代表任意数量参数 , (*)代表一个参数,  ( * , String) 代表第一个参数为任何值,第二个为String类型. 
-
-`modifiers-pattern`: 描述访问控制符 比如 `public`.....
 
 `throws-pattern`: 描述抛出什么样的异常
 

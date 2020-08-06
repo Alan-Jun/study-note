@@ -96,7 +96,7 @@ Redis key值是二进制安全的，这意味着可以用任何二进制序列�
 
 [MOVE](#MOVE)
 
-[PBKECT](#OBJECT)
+[OBJECT](#OBJECT)
 
 [PERSIST](#PERSIST)
 
@@ -136,47 +136,221 @@ pattern：`del key [key....] `
 
 ### DUMP
 
-### EXISTS
+> **起始版本：2.6.0**
 
-### EXPIRE
+序列化给定 key ，并返回被序列化的值，使用 [RESTORE](#RESTORE) 命令可以将这个值反序列化为 Redis 键。
 
-### EXPIREAT
+序列化生成的值有以下几个特点：
 
-### KEYS
+- 它带有 64 位的校验和，用于检测错误，[RESTORE](http://www.redis.cn/commands/restore) 在进行反序列化之前会先检查校验和。
+- 值的编码格式和 RDB 文件保持一致。
+- RDB 版本会被编码在序列化值当中，如果因为 Redis 的版本不同造成 RDB 格式不兼容，那么 Redis 会拒绝对这个值进行反序列化操作。
 
-### MIGRATE
+序列化的值不包括任何生存时间信息。
 
-### MOVE
+**返回值**
 
-### PBKECT
-
-### PERSIST
-
-### PEXPIRE
-
-### PEXPIREAT
-
-### PTTL
-
-### RANDOMKEY
-
-### RENAME
-
-### RENAMENX
+如果 key 不存在，那么返回 nil。</br> 否则，返回序列化之后的值。
 
 ### RESTORE
 
-### SORT
+反序列化给定的序列化值，并将它和给定的 key 关联。
+
+如果反序列化成功那么返回 OK ，否则返回一个错误。
+
+```
+redis> RESTORE mykey 0 "\n\x17\x17\x00\x00\x00\x12\x00\x00\x00\x03\x00\
+                        x00\xc0\x01\x00\x04\xc0\x02\x00\x04\xc0\x03\x00\
+                        xff\x04\x00u#<\xc0;.\xe9\xdd"
+OK
+
+```
+
+### EXISTS
+
+`EXISTS key`
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(1)
+
+返回key是否存在。
+
+**返回值**
+
+- 1 如果key存在
+- 0 如果key不存在
+
+### EXPIR
+
+`EXPIRE key seconds`
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(1)
+
+设置key的过期时间 单位 秒
+
+对于已经设置过过期时间的key操作，会更新它的过期时间
+
+**返回值**
+
+- `1` 如果成功设置过期时间。
+- `0` 如果`key`不存在或者不能设置过期时间。
+
+> 注意 如果 key被 [RENAME](#RENAME)了 那么相关的过期时间会转移到新的key上
+
+### EXPIREAT
+
+`EXPIREAT key timestamp`
+
+> **起始版本：1.2.0**
+>
+> **时间复杂度：**O(1)
+
+和 [EXPIRE](#EXPIRE) 类似，都用于为 key 设置生存时间。不同在于它接受的时间参数是 UNIX 时间戳 Unix timestamp 。单位秒
+
+返回值也和 [EXPIRE](#EXPIRE) 类似
+
+### PEXPIRE
+
+`PEXPIRE key milliseconds`
+
+> **起始版本：2.6.0**
+>
+> **时间复杂度：**O(1)
+
+和 [EXPIRE](#EXPIRE) 功能相同，不过单位是毫秒
+
+### PEXPIREAT
+
+和 [EXPIREAT](#EXPIRE) 功能相同，不过单位是毫秒
+
+### PERSIST
+
+`PERSIST key`
+
+> **起始版本：2.2.0**
+>
+> **时间复杂度：**O(1)
+
+移除给定key的生存时间，将这个 key 从『易失的』(带生存时间 key )转换成『持久的』
 
 ### TTL
 
+`TTL key`
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(1)
+
+返回key剩余的过期时间
+
+**返回值**
+
+- 如果key不存在或者已过期，返回 `-2`
+- 如果key存在并且没有设置过期时间（永久有效），返回 `-1` 。
+
+### PTTL
+
+`PTTL key`
+
+> **起始版本：2.6.0**
+>
+> **时间复杂度：**O(1)
+
+和[TTL](#TTL) 相同，不同之处在于单位是毫秒
+
+### KEYS
+
+`KEYS pattern`
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度为O(N)，N为数据库里面key的数量。**
+
+查找所有符合给定模式pattern（正则表达式）的 key 。
+
+**警告**: `KEYS` 的速度非常快，但在一个大的数据库中使用它仍然可能造成性能问题，如果你需要从一个数据集中查找特定的 `KEYS`， 你最好还是用 Redis 的集合结构 [SETS](#集合（sets）) 来代替。
+
+支持的正则表达模式：
+
+- `h?llo` 匹配 `hello`, `hallo` 和 `hxllo`
+- `h*llo` 匹配 `hllo` 和 `heeeello`
+- `h[ae]llo` 匹配 `hello` 和 `hallo,` 但是不匹配 `hillo`
+- `h[^e]llo` 匹配 `hallo`, `hbllo`, … 但是不匹配 `hello`
+- `h[a-b]llo` 匹配 `hallo` 和 `hbllo`
+
+如果你想取消字符的特殊匹配（正则表达式，可以在它的前面加`\`。
+
+**返回值**
+
+所有符合条件的key
+
+### MOVE
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(1)
+
+将当前数据库的 key 移动到给定的数据库 db 当中。（不能跨机器）
+
+如果当前数据库(源数据库)和给定数据库(目标数据库)有相同名字的给定 key ，或者 key 不存在于当前数据库，那么 MOVE 没有任何效果。
+
+因此，也可以利用这一特性，将 `MOVE` 当作锁(locking)原语(primitive)。
+
+**返回值**
+
+- 移动成功返回 1
+- 失败则返回 0
+
+### MIGRATE
+
+`MIGRATE host port key destination-db timeout [COPY] [REPLACE]`
+
+> **起始版本：2.6.0**
+
+http://www.redis.cn/commands/migrate.html
+
+### RANDOMKEY
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(1)
+
+从当前数据库返回一个随机的key。
+
+如果数据库没有任何key，返回nil，否则返回一个随机的key。
+
+### RENAME
+
+`RENAME key newkey`
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(1)
+
+将key重命名为newkey，如果key与newkey相同，将返回一个错误。如果newkey已经存在，则值将被覆盖。
+
+### RENAMENX
+
+### SORT
+
+http://www.redis.cn/commands/sort.html
+
 ### TYPE
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(1)
+
+返回`key`所存储的`value`的数据结构类型,它可以返回`string`, `list`, `set`, `zset` 和 `hash`等不同的类型。如果`key`不存在时返回`none`。
 
 ### WAIT
 
 ### SCAN
 
-
+ [SCAN](http://www.redis.cn/commands/scan.html)
 
 
 ## 字符串（strings）
@@ -507,7 +681,7 @@ pattern：`decrby key decrement`
 
 ### MSET 
 
-pattern：`mset key value [key value ....]`
+pattern：`mset key value  [key value ....]`
 
 > 可用版本： >= 1.0.1
 >
@@ -638,6 +812,16 @@ http://www.redis.cn/commands/bitop.html
 > **起始版本：2.8.7**
 >
 > **时间复杂度：**O(N)
+
+返回位图中第一个值为bit的二进制位的位置
+
+http://www.redis.cn/commands/bitpos.html
+
+```
+setbit m  3 1
+bitpos m 0   返回0
+bitpos m 1   返回3
+```
 
 ### BITCOUNT
 
@@ -1311,13 +1495,13 @@ BLPOP 保证返回一个存在于 list2 里的元素（因为它是从 list1 –
 - [SMOVE](#smove)
 - [SCARD](#scard)
 - [SMEMBERS](#smembers)
-- [SSCAN](#sscan)
 - [SINTER](#sinter)
 - [SINTERSTORE](#sinterstore)
 - [SUNION](#sunion)
 - [SUNIONSTORE](#sunionstore)
 - [SDIFF](#sdiff)
 - [SDIFFSTORE](#sdiffstore)
+- [SSCAN](#sscan)
 
 ### SADD 
 
@@ -1340,8 +1524,6 @@ pattern：`SADD key member [member]...`
 被新添加到集合中的新元素的数量，不包括被忽略的元素。
 
 ### SISMEMBER 
-
-sismember : set - is member
 
 pattern：`SISMEMBER  key menber`
 
@@ -1373,8 +1555,6 @@ pattern：`SPOP key`
 
 ### SRANDMEMBER 
 
-SRANDMEMBER : set - rand member
-
 pattern：`SRANDMEMBER  key [count]`
 
 > 可用版本： >= 1.0.0
@@ -1394,11 +1574,469 @@ pattern：`SRANDMEMBER  key [count]`
 
 ### SREM 
 
+`SREM key member [member ...]`
+
+**起始版本：1.0.0**
+
+**时间复杂度：**O(N) 
+
+在key集合中移除指定的元素. 如果指定的元素不是key集合中的元素则忽略 如果key集合不存在则被视为一个空的集合，该命令返回0.
+
+如果key的类型不是一个集合,则返回错误.
+
+#### 返回值
+
+从集合中移除元素的个数，不包括不存在的成员.
+
+### SMOVE
+
+`SMOVE source destination member`
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(1)
+
+将member从source集合移动到destination集合中
+
+如果source 集合不存在或者不包含指定的元素,这smove命令不执行任何操作并且返回0.否则对象将会从source集合中移除，并添加到destination集合中去，如果destination集合已经存在该元素，则smove命令仅将该元素充source集合中移除. 如果source 和destination不是集合类型,则返回错误.
+
+#### 返回值
+
+- 如果该元素成功移除,返回1
+- 如果该元素不是 source集合成员,无任何操作,则返回0.
+
+```
+redis> SADD myset "one"
+(integer) 1
+redis> SADD myset "two"
+(integer) 1
+redis> SADD myotherset "three"
+(integer) 1
+redis> SMOVE myset myotherset "two"
+(integer) 1
+redis> SMEMBERS myset
+1) "one"
+redis> SMEMBERS myotherset
+1) "three"
+2) "two"
+redis> 
+```
+
+### SCARD
+
+`SCARD key`
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(1)
+
+返回集合存储的key的数量 (集合元素的数量).
+
+#### 返回值
+
+集合的基数(元素的数量)；如果key不存在,则返回 0.
+
+```
+redis> SADD myset "Hello"
+(integer) 1
+redis> SADD myset "World"
+(integer) 1
+redis> SCARD myset
+(integer) 2
+redis> 
+```
+
+### SMEMBERS
+
+`SMEMBERS key`
+
+> **起始版本：1.0.0**
+>
+> *时间复杂度：**O(N) where N is the set cardinality.
+
+返回key集合所有的元素. 
+
+该命令的作用与使用一个参数的[SINTER](#SINTER) 命令作用相同.[](http://www.redis.cn/commands/sinter.html) 命令作用相同.
+
+> **注意：如果集合数据量过大，使用这个命令很可能造成服务器阻塞**
+
+#### 返回值
+
+返回key集合所有的元素. 
+
+### SINTER
+
+`SINTER key [key ...]`
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(N*M)  
+
+返回指定所有的集合的成员的交集.
+
+```
+key1 = {a,b,c,d}
+key2 = {c}
+key3 = {a,c,e}
+SINTER key1 key2 key3 = {c}
+```
+
+如果某个key不存在则被认为是一个空的集合,当给定的集合为空的时候,结果也为空.(一个集合为空，结果一直为空).
+
+#### 返回值
+
+返回指定所有的集合的成员的交集.
+
+### SINTERSTORE
+
+`SINTERSTORE destination key [key ...]`
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(N*M)
+
+这个命令与[SINTER](#SINTER)命令类似, 但是它并不是直接返回结果集,而是将结果保存在 destination集合中.
+
+如果destination 集合存在, 则会被重写.
+
+#### 返回值
+
+结果集中成员的个数.
+
+### SUNION
+
+`SUNION key [key ...]`
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(N)
+
+返回给定的多个集合的并集中的所有成员.
+
+#### 返回值
+
+并集的成员列表
+
+### SUNIONSTORE
+
+`SUNIONSTORE destination key [key ...]`
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(N) 
+
+该命令作用类似于[SUNION](#SUNION)命令,不同的是它并不返回结果集,而是将结果存储在destination集合中.
+
+如果destination 已经存在,则将其覆盖.
+
+#### 返回值
+
+结果集中元素的个数.
+
+### SDIFF 
+
+`SDIFF key [key ...]`
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(N)
+
+返回一个集合与给定集合的差集的元素.
+
+```
+key1 = {a,b,c,d}
+key2 = {c}
+key3 = {a,c,e}
+SDIFF key1 key2 key3 = {b,d}
+```
+
+#### 返回值
+
+结果集的元素.
+
+### SDIFFSTORE
+
+> **起始版本：1.0.0**
+>
+> **时间复杂度：**O(N)
+
+该命令类似于 [SDIFF](#SDIFF), 不同之处在于该命令不返回结果集，而是将结果存放在`destination`集合中.
+
+如果`destination`已经存在, 则将其覆盖重写.
+
+#### 返回值
+
+ 结果集元素的个数.
+
+### SSCAN
+
+http://www.redis.cn/commands/scan.html
+
 
 
 ## 有序集合（sorted sets）
 
 - [ZADD](#ZADD)
+- [ZINCRBY](#ZINCRBY)
 - [ZCARD](#ZCARD)
 - [ZCOUNT](#ZCOUT)
+- [ZLEXCOUNT](#ZLEXCOUNT)
 - ...
+
+### ZADD
+
+`ZADDkey [NX|XX] [CH] [INCR] score member [score member ...]`
+
+> **起始版本：1.2.0**
+>
+> **时间复杂度：**O(log(N))
+>
+> ###### ZADD 参数（options） (>= Redis 3.0.2)
+
+将所有指定成员添加到键为`key`有序集合（sorted set）里面。 添加时可以指定多个分数/成员（score/member）对。 如果指定添加的成员已经是有序集合里面的成员，则会更新改成员的分数（scrore）并更新到正确的排序位置。
+
+如果`key`不存在，将会创建一个新的有序集合（sorted set）并将分数/成员（score/member）对添加到有序集合，就像原来存在一个空的有序集合一样。如果`key`存在，但是类型不是有序集合，将会返回一个错误应答。
+
+分数值是一个双精度的浮点型数字字符串。`+inf`和`-inf`都是有效值。
+
+#### ZADD 参数（options） (>= Redis 3.0.2)
+
+ZADD 命令在`key`后面分数/成员（score/member）对前面支持一些参数，他们是：
+
+- **XX**: 仅仅更新存在的成员，不添加新成员。
+
+- **NX**: 不更新存在的成员。只添加新成员。
+
+- **CH**: 修改返回值为发生变化的成员总数= 新增的元素+加上score被更新的元素的总量
+
+  注：在通常情况下，`ZADD`返回值只计算新添加的成员的数量。已存在的元素就算是被更新的score的也不计算在内
+
+- **INCR**: 当`ZADD`指定这个选项时，成员的操作就等同[ZINCRBY](#ZINCRBY)命令，对成员的分数进行递增操作。
+
+#### 返回值
+
+- 添加到有序集合的成员数量，不包括已经存在的成员。
+- 指定 CH 参数 。返回新增的元素+score被更新的元素的总量
+
+如果指定`INCR`参数, 返回将会变成[bulk-string-reply](http://www.redis.cn/topics/protocol.html#bulk-string-reply) ：
+
+- 成员的新分数（双精度的浮点型数字）字符串。
+
+### ZSCORE
+
+`ZSCORE key member`
+
+> **起始版本：1.2.0**
+>
+> **时间复杂度：**O(n)
+
+返回有序集key中，成员member的score值。
+
+#### 返回值
+
+member成员的score值（double型浮点数），以字符串形式表示。
+
+如果member元素不是有序集key的成员，或key不存在，返回nil。
+
+### ZINCRBY
+
+`ZINCRBY key increment member`
+
+> **起始版本：1.2.0**
+>
+> **时间复杂度：**O(log(N))  N 集合的元素的数量
+
+为有序集key的成员member的score值加上增量increment。如果key中不存在member，就在key中添加一个member，score是increment（就好像它之前的score是0.0）。如果key不存在，就创建一个只含有指定member成员的有序集合。
+
+当key不是有序集类型时，返回一个错误。
+
+score值必须是字符串表示的整数值或双精度浮点数，并且能接受double精度的浮点数。也有可能给一个负数来减少score的值。
+
+#### 返回值
+
+member成员的新score值，以字符串形式表示。
+
+```
+redis> ZADD myzset 1 "one"
+(integer) 1
+redis> ZADD myzset 2 "two"
+(integer) 1
+redis> ZINCRBY myzset 2 "one"
+"3"
+redis> ZRANGE myzset 0 -1 WITHSCORES
+1) "two"
+2) "2"
+3) "one"
+4) "3"
+```
+
+### ZCARD
+
+`ZCARD key`
+
+> **起始版本：1.2.0**
+>
+> **时间复杂度：**O(1)
+
+返回key的有序集元素个数。
+
+#### 返回值
+
+key存在的时候，返回有序集的元素个数，否则返回0。
+
+### ZCOUNT
+
+`ZCOUNT key min max`
+
+> **起始版本：2.0.0**
+>
+> **时间复杂度：**O(log(N))
+
+返回有序集key中，score值在[min，max]范围内的的成员数量。
+
+你可以使用 `(` 符号变成开区间 例如：
+
+```
+(1 2 = (1，2]
+1 (5 = [1,5)
+(1 (5 = (1,5)
+1 5 = [1,5]
+```
+
+#### 返回值
+
+指定分数范围的元素个数。
+
+### ZLEXCOUNT
+
+http://www.redis.cn/commands/zlexcount.html
+
+### ZRANGE
+
+`ZRANGE key start stop [WITHSCORES]`
+
+> **起始版本：1.2.0**
+>
+> **时间复杂度：**O(log(N)+M) with N being the number of elements in the sorted set and M the number of elements returned.
+
+返回存储在有序集合`key`中的指定范围的元素。 返回的元素可以认为是按**得分从最低到最高排列。 如果得分相同，将按字典排序。**
+
+参数`start`和`stop`**都是基于零的索引**，即`0`是第一个元素，`1`是第二个元素，以此类推。 它们也可以是负数，表示从有序集合的末尾的偏移量，其中`-1`是有序集合的最后一个元素，`-2`是倒数第二个元素，等等。
+
+`start`和`stop`都是**全包含的区间**，因此例如`ZRANGE myzset 0 1`将会返回有序集合的第一个和第二个元素。
+
+超出范围的索引不会产生错误。 如果`start`参数的值大于有序集合中的最大索引，或者`start > stop`，将会返回一个空列表。 如果`stop`的值大于有序集合的末尾，Redis会将其视为有序集合的最后一个元素。
+
+**可以传递`WITHSCORES`选项，以便将元素的分数与元素一起返回。这样，返回的列表将包含`value1,score1,...,valueN,scoreN`，而不是`value1,...,valueN`。 客户端类库可以自由地返回更合适的数据类型**
+
+当你需要元素从最高分到最低分排列时，请参阅[ZREVRANGE](#ZREVRANGE)。
+
+> http://www.redis.cn/commands/zrange.html
+
+### ZRANGEBYLEX
+
+`ZRANGEBYLEX key min max [LIMIT offset count] `
+
+> **起始版本：2.8.9**
+>
+> **时间复杂度：**O(log(N)+M) with N being the number of elements in the sorted set and M the number of elements being returned. If M is constant (e.g. always asking for the first 10 elements with LIMIT), you can consider it O(log(N)).
+
+ZRANGEBYLEX 返回指定成员区间内的成员，**按成员字典正序排序, 分数必须相同**。 **在某些业务场景中,需要对一个字符串数组按名称的字典顺序进行排序时,可以使用Redis中SortSet这种数据结构来处理。**
+
+| 指令   | 是否必须 | 说明                                                         |
+| ------ | -------- | ------------------------------------------------------------ |
+| key    | 是       | 有序集合键名称                                               |
+| min    | 是       | 字典中排序位置较小的成员,必须以"["开头,或者以"("开头,可使用`-`表示得分最小值 |
+| max    | 是       | 字典中排序位置较大的成员,必须以"["开头,或者以"("开头,可使用`+`表示得分最大值 |
+| LIMIT  | 否       | 返回结果是否分页,指令中包含LIMIT后offset、count必须输入      |
+| offset | 否       | 返回结果起始位置                                             |
+| count  | 否       | 返回结果数量                                                 |
+
+
+
+### ZREVRANGE
+
+`ZREVRANGE key start stop [WITHSCORES]`
+
+> **起始版本：1.2.0**
+>
+> **时间复杂度：**O(log(N)+M) with N being the number of elements in the sorted set and M the number of elements returned.
+
+这个命令刚好和[ZRANGE](#ZRANGE)相反
+
+## 管道 Pipelining
+
+官网 解释 http://www.redis.cn/topics/pipelining.html
+
+出了官网解释中说明的优缺点之外，我们还需要知道的是，
+
+* **pipeline期间将“独占”当前redis连接**，此期间该连接将不能进行非“管道”类型的其他操作，直到该pipeline关闭。
+* **管道执行不是原子性的** 中间可能会存在部分失败的情况，也就是说不能保证每条命令都能执行成功，如果中间有命令出现错误，redis不会中断执行，而是直接执行下一条命令，然后将所有命令的执行结果（执行成果或者执行失败）放到列表中统一返回
+
+## HyperLogLog
+
+
+
+## 事务
+
+## 发布订阅
+
+## lua 脚本
+
+脚本函数 
+
+```
+redis.call()
+redis.pcall()
+
+使用 KEYS[index] 获取key
+使用 ARGV[index] 获取value
+index 从 1 开始数
+
+例如下面这个脚本（注意这个脚本没有执行任何redis的类型函数）
+"return {KEYS[1],KEYS[2],ARGV[1],ARGV[2]}" 2 key1 key2 first second
+```
+
+redis.call() 与 redis.pcall()很类似, 他们唯一的区别是当redis命令执行结果返回错误时， redis.call()将返回给调用者一个错误，而redis.pcall()会将捕获的错误以Lua表的形式返回
+
+> 更多 http://www.redis.cn/commands/eval.html
+
+### EVAL script numkeys key [key ...] arg [arg ...]
+
+> **起始版本：2.6.0**
+>
+> **时间复杂度：**取决于脚本本身的执行的时间复杂度。
+
+https://www.runoob.com/redis/scripting-eval.html
+
+### SCRIPT LOAD script
+
+该命令用于将脚本 script 添加到脚本缓存中，但并不立即执行这个脚本。下次就可以使用
+
+Evalsha 命令来传参执行了
+
+https://www.runoob.com/redis/scripting-script-load.html
+
+### Evalsha sha1 numkeys key [key ...] arg [arg ...]
+
+用于执行已被服务器保存的脚本
+
+https://www.runoob.com/redis/scripting-evalsha.html
+
+### SCRIPT EXISTS script [script ...\]
+
+用于校验脚本是否已被服务器保存
+
+https://www.runoob.com/redis/scripting-script-exists.html
+
+### SCRIPT FLUSH
+
+用于清除所有 Lua 脚本缓存。
+
+https://www.runoob.com/redis/scripting-script-flush.html
+
+### SCRIPT KILL
+
+杀死当前正在运行的 Lua 脚本。
+
+https://www.runoob.com/redis/scripting-script-kill.html

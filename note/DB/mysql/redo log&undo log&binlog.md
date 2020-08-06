@@ -89,6 +89,12 @@ binlog的格式也有三种：STATEMENT、ROW、MIXED 。
 - **如果启用了二进制日志binlog，则设置sync_binlog=1，即每提交一次事务同步写到磁盘中。**
 - **总是设置innodb_flush_log_at_trx_commit=1，即每提交一次事务都写到磁盘中。**
 
+> sync_binlog=1 ； innodb_flush_log_at_trx_commit=1 确实是最保险的方式，但是性能影响很大，或许在某些，读写分离的架构，写很少的情况下，写库这样做完全没有问题，但是其他情况就需要权衡了
+>
+> 关于redolog数据丢失问题我们可以看看 https://blog.51cto.com/wangwei007/2487410
+>
+> 
+
 ## redo log buffer 刷盘规则
 
 **prepare 状态得redo log也是会落盘的**

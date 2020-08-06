@@ -464,17 +464,111 @@ Implementation techniques 小节的定义： “ In object - oriented programmin
 
 ## 6.2 Spring IOC 依赖注入
 
+* 根据Bean 名称注入
+* 根据Bean 类型注入
+  * 单个Bean 对象
+  * 集合Bean 对象
+* 注入容器內建Bean 对象
+* 注入非Bean 对象
+* 注入类型
+  * 实时注入
+  * 延迟注入
+
 ## 6.3 Spring IOC 依赖来源
+
+* 自定义Bean
+* 容器內建Bean 对象
+* 容器內建依赖
 
 ## 6.4 Spring IOC 配置元信息管理
 
+* Bean 定义配置
+  * 基于XML 文件
+  * 基于Properties 文件
+  * 基于Java 注解
+  * 基于Java API（专题讨论） 
+*  IoC 容器配置 
+  *  基于XML 文件 
+  * 基于Java 注解 
+  * 基于Java API （专题讨论） 
+* 外部化属性配置
+  *  基于Java 注解
+
 ## 6.5 Spring IOC 容器
+
+* BeanFactory 和ApplicationContext 谁才是Spring IoC 容器？
+  * BeanFactory 是Spring 底层IoC 容器
+  * ApplicationContext 是具备应用特性的BeanFactory 超集 ,它实现 beanFactory功能的方式是通过组合了的实现示例来达成（虽然ApplicationContext 实现了BeanFactory接口，但是实际的同能是通过组合beanFactory实例来实现的）
 
 ## 6.6 Spring 应用上下文（context）
 
+*  ApplicationContext 除了IoC 容器角色，还有提供： 
+  * 面向切面（AOP）
+  * 配置元信息（Configuration Metadata）
+  * 资源管理（Resources）
+  * 事件（Events）
+  * 国际化（i18n）
+  * 注解（Annotations）
+  * Environment 抽象（Environment Abstraction）
+
 ## 6.7 使用 Spring IOC 容器
+
+* BeanFactory 是Spring 底层IoC 容器
+* ApplicationContext 是具备应用特性的BeanFactory 超集
 
 ## 6.8 Spring IOC 容器的生命周期
 
+* 启动
+* 运行
+* 停止
 
+# 7. Spring Bean 基础
 
+## 7.1 定义Spring Bean 
+
+* 什么是BeanDefinition？ 
+
+  BeanDefinition 是Spring Framework 中定义Bean 的配置元信息接口，包含： 
+  * Bean 的类名
+  * Bean 行为配置元素，如作用域、自动绑定的模式，生命周期回调等
+  * 其他Bean 引用，又可称作合作者（collaborators）或者依赖（dependencies）
+  * 配置设置，比如Bean 属性（Properties）
+
+## 7.2 BeanDefinition 元信息 
+
+| 属性（Property）         | 说明 Class                                   |
+| ------------------------ | -------------------------------------------- |
+| Bean                     | 全类名，必须是具体类，不能用抽象类或接口     |
+| Name                     | Bean 的名称或者ID                            |
+| Scope                    | Bean 的作用域（如：singleton、prototype 等） |
+| Constructor arguments    | Bean 构造器参数（用于依赖注入）              |
+| Properties               | Bean 属性设置（用于依赖注入）                |
+| Autowiring mode          | Bean 自动绑定模式（如：通过名称byName）      |
+| Lazy initialization mode | Bean 延迟初始化模式（延迟和非延迟）          |
+| Initialization method    | Bean 初始化回调方法名称                      |
+| Destruction method       | Bean 销毁回调方法名称                        |
+
+BeanDefinition 的构建？
+
+* 通常是通过XMl进行配置
+* 当然也可以通过API
+  * 通过BeanDefinitionBuilder
+  * 通过AbstractBeanDefinition 以及派生类
+
+## 7.3 命名Spring Bean 
+
+## 7.4 Spring Bean 的别名 
+
+## 7.5 注册Spring Bean 
+
+## 7.6 实例化Spring Bean 
+
+## 7.7 初始化Spring Bean 
+
+## 7.8 延迟初始化Spring Bean 
+
+## 7.9 销毁Spring Bean 
+
+## 7.10 垃圾回收Spring Bean 
+
+## 7.11 面试题精选

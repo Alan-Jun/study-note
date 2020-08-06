@@ -67,7 +67,7 @@ public E take() throws InterruptedException {
                     return q.poll();// 返回值
                 first = null; // don't retain ref while waiting
                 /**
-                 * 我们知道我们队列是一个最小堆的实现，那么first也就是最需要最小延时的哪个节点，如果一个
+                 * 我们知道我们队列是一个最小堆的实现，那么first也就是最需要最小延时的节点，如果一个
                  * 线程走到这的时候，需要延时，那就需要调用 available.awaitNanos(delay); 这就释放了
                  * 锁，下一个线程过来，如果还是这一个节点，那么如果还调available.awaitNanos(delay);
                  * 方法的话，可能出现的情况就是 这两个线程间隔时间很短，几乎先后被唤醒，那么很可能存在锁争
