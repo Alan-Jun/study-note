@@ -1,9 +1,9 @@
 # introduction
 
-AbstractQueuedLongSynchronizer **队列同步器**，是**用来构建锁或者其他同步组 件的基础框架**，
+AbstractQueuedLongSynchronizer **队列同步器**，是**用来构建锁或者其他同步组件的基础框架**，
 
-* **它使用了一个int成员变量表示同步状态(管理同步状态)**
-* **通过内置的`FIFO`队列来完成资源获取线程的排队工作**
+* **它使用了一个volatile int成员变量表示同步状态(管理同步状态)**
+* **通过内置的`FIFO`队列来完成对资源"竞争"线程的排队工作**
 
 同步器的主要使用方式是继承，子类通过继承同步器并实现它的抽象方法来管理同步状态，在抽象方法的实现过程中免不了要对同步状态进行更改，这时就需要使用同步器提供的3 个方法（getState()、setState(int newState)和compareAndSetState(int expect,int update)）来进行操作，因为它们能够保证状态的改变是安全的。子类推荐被定义为自定义同步组件的静态内部类，同步器自身没有实现任何同步接口，它仅仅是定义了若干同步状态获取和释放的方法来供自定义同步组件使用，同步器既可以支持独占式地获取同步状态，也可以支持共享式地获取同步态，这样就可以方便实现不同类型的同步组件（ReentrantLock、 ReentrantReadWriteLock和CountDownLatch等）
 
@@ -13,10 +13,10 @@ AbstractQueuedLongSynchronizer **队列同步器**，是**用来构建锁或者�
 
 **同步器的设计是基于模板方法模式的，也就是说，使用者需要继承同步器并重写指定的方法，随后将同步器组合在自定义同步组件的实现中，并调用同步器提供的模板方法，而这些模板方法将会调用使用者重写的方法。重写同步器指定的方法时，需要使用同步器提供的如下3个方法来访问或修改同步状态。**
 
-* ·getState()：获取当前同步状态。
-* ·setState(int newState)：设置当前同步状态。
+* getState()：获取当前同步状态。
+* setState(int newState)：设置当前同步状态。
 
-* ·compareAndSetState(int expect,int update)：使用CAS设置当前状态，该方法能够保证状态
+* compareAndSetState(int expect,int update)：使用CAS设置当前状态，该方法能够保证状态
   设置的原子性。
 
 ## 实现自定义同步组件时，将会调用同步器提供的模板方法
@@ -25,7 +25,7 @@ AbstractQueuedLongSynchronizer **队列同步器**，是**用来构建锁或者�
 
 | 方法名                                                       | 描述                                                         | 源码index                                                 |
 | ------------------------------------------------------------ | ------------------------------------------------------------ | --------------------------------------------------------- |
-| public final void **acquire**(int arg)                       | 独占式获取同步状态，如果当前线程获取同步状态成功，则由该方法返回，否则，将会进入同步队列等待，该方法将会调用重写的**tryAcquire**（这里也不一定Semaphore限流控制器调用的就是**acquireSharedInterruptibly**） | [acquire](#acquire)                                       |
+| public final void **acquire**(int arg)                       | 独占式获取同步状态，如果当前线程获取同步状态成功，则由该方法返回，否则，将会进入同步队列等待，该方法将会调用重写的**tryAcquire** | [acquire](#acquire)                                       |
 | public final void **acquireInterruptibly**(int arg)          | 与**acquire**相同，不过该方法响应中断，线程在同步队列中等待时被中断了，则该方法会抛出**InterruptedException**异常 | [acquireInterruptibly](#acquireInterruptibly)             |
 | public final boolean **tryAcquireNanos**(int arg, long nanosTimeout) | 在**acquireInterruptibly**的基础上增加了超时限制，如果在超时限制范围内未获取到同步状态那么返回false,获取到返回true | [tryAcquireNanos](#tryAcquireNanos)                       |
 | public final boolean **release**(int arg)                    | 独占式的释放同步状态，该方法释放同步状态之后会将同步队列中第一个节点唤醒 **调用tryRelease** | [release](#release)                                       |

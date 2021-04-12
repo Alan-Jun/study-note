@@ -572,3 +572,13 @@ BeanDefinition 的构建？
 ## 7.10 垃圾回收Spring Bean 
 
 ## 7.11 面试题精选
+
+
+
+
+
+
+
+
+
+# spring 资源管理

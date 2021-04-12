@@ -1,3 +1,9 @@
+## 跳过 单元测试同时跳过对test包的编译
+
+```
+-Dmaven.test.skip=true
+```
+
 ## maven快速自动更新子模块项目的版本号
 
 ```
@@ -55,3 +61,4 @@ mvn -N versions:update-child-modules
 ```
 
 则会自动把子POM的<parent>标签中的version更新为和父POM一致。
+

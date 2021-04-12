@@ -446,5 +446,19 @@ git reset --hard origin/paytest
 git push -f
 ```
 
+## 3.9 本地分支关联远程分支
 
+远程分支存在的情况
+
+```
+git branch --set-upstream-to origin/远程分支
+```
+
+远程分支不存在的情况
+
+```
+git push origin newdev:dev
+```
+
+可以将本地的 newdev 分支 和  origin/dev 分支关联（origin/dev不存在会创建一个）
 

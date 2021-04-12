@@ -1,4 +1,4 @@
-#  申明
+申明
 
 内容来源于spring官网，我只是做一下笔记加深印象以及方便自己产找，以及后续使用中问题的记录。这里不介绍Spring IOC 基础的东西，以及XML的配置这戏额内容官网都有，需要的情趣查看 https://docs.spring.io/spring/docs/5.0.7.RELEASE/spring-framework-reference/core.html#beans
 

@@ -1,137 +1,23 @@
 # JUC 介绍
 
-整体结构图
+JUC就是我们的 j ava.util.current 这个并发工具包它包括了
+
+* atomic 原子变量工具类
+* locks 锁工具类
+* 并发容器 （list, map,queue,set 等容器的并发工具）
+* 线程池工具
+
+架构图：
 
 ![1539076608379](../assets/1539076608379.png)
 
-从图中我们可以很明显的了解到，JUC的整个实现的基础是VAS+volatile的读写功能来实现的。
+从图中我们可以很明显的了解到，JUC的整个实现的基础是CAS+volatile，然后再次基础上构建了我们的AQS(AbstractQueuedLongSynchronizer)，原子变量类，进而最终构建了我们最上层的工具，所以这里我们的文章讲解孙旭也将和架构图中的一样，从下到上，其中非阻塞数据结构也就是我们的 java容器相关的基础知识
 
-有关于CAS，volatile的详解请看：
+有关于CAS，volatile的详解请看：[并发编程中的重要概念](../并发编程中的重要概念.md) 介绍了volatile
 
-> [CAS](CAS.md)
->
-> [并发编程中的重要概念](并发编程中的重要概念.md) 介绍了volatile
->
-> [一文解决内存屏障](一文解决内存屏障.md) 介绍了volatile 相关更详细的补充说明
+# AQS(AbstractQueuedLongSynchronizer)
 
-# 原子变量类
-
-## 分类
-
-基本类型：
-
-* AtomicBoolean 
-* AtomicInteger
-* AtomicLong
-* AtomicIntegerFieldUpdater
-* AtomicLongFieldUpdater
-
-[1.8 新增的几个 处理类](Atomic/1.8新增.md)
-
-* LongAdder 高并发情况下比AtomicLong的表现要好，但是不能完全替代AtomicLong，具体的看[为什么要引入LongAdder](Atomic/1.8新增.md )
-* LongAccumulator
-* DoubleAdder
-* DoubleAccumulator
-
-reference: 
-
-* [AtomicReference](Atomic/AtomicReference.md)
-* [AtomicIntegerFieldUpdater](Atomic/AtomicIntegerFieldUpdater.md)
-* [AtomicStampedReference](Atomic/AtomicStampedReference.md)
-* [AtomicMarkableReference](Atomic/AtomicMarkableReference.md)
-
-数组：
-
-* AtomicIntegerArray 
-* AtomicLongArray
-* AtomicReferenceArray
-
-## lazySet
-
-**我们很多原子类中都有 lazySet这样的方法，lazy 就是在不需要让共享变量的修改立刻让其他线程可见的时候，以设置普通变量的方式来修改该变量，以减少不必要的内存屏障，从而提高程序执行的效率**
-
-## 实现原理
-
-这些类的实现在 java.util.concurrent.atomic包下。
-
-我们java中并发下实现原子操作可以使用 **锁** 或 **通过循环CAS来实现原子操作（自旋）**,而我们的原子变量类都是使用的CAS。
-
-举例我们来看看基本类型的原子变量AtomicLong的源代码，主要的字段：value字段，和valueOffset字段。下面源码中有注释
-
-```java
-public class AtomicLong extends Number implements java.io.Serializable {
-    private static final long serialVersionUID = 1927816293512124184L;
-
-    // setup to use Unsafe.compareAndSwapLong for updates
-    private static final Unsafe unsafe = Unsafe.getUnsafe();
-    // 这个值是我们数据在内存中的偏移量，查询值得时候通过这个找到内存中保存的value得值
-    private static final long valueOffset;
-
-    /**
-     * Records whether the underlying JVM supports lockless
-     * compareAndSwap for longs. While the Unsafe.compareAndSwapLong
-     * method works in either case, some constructions should be
-     * handled at Java level to avoid locking user-visible locks.
-     */
-    static final boolean VM_SUPPORTS_LONG_CAS = VMSupportsCS8();
-
-    /**
-     * Returns whether underlying JVM supports lockless CompareAndSet
-     * for longs. Called only once and cached in VM_SUPPORTS_LONG_CAS.
-     */
-    private static native boolean VMSupportsCS8();
-
-    static {
-        try {
-            valueOffset = unsafe.objectFieldOffset
-                (AtomicLong.class.getDeclaredField("value"));
-        } catch (Exception ex) { throw new Error(ex); }
-    }
-	// 使用volatile存储我们的实际的值，保证了数据的可见性
-    private volatile long value;
-
-    /**
-     * Creates a new AtomicLong with the given initial value.
-     *
-     * @param initialValue the initial value
-     */
-    public AtomicLong(long initialValue) {
-        value = initialValue;
-    }
-
-    /**
-     * Creates a new AtomicLong with initial value {@code 0}.
-     */
-    public AtomicLong() {
-    }
-    // 剩下的省略掉
-}
-```
-
-然后我们再来看看一个修改数据得方法具体的实现，别的放大都大同小异就不做过多说明
-
-```java
- /**
-     * Atomically increments by one the current value.
-     *
-     * @return the previous value
-     */
-    public final long getAndIncrement() {
-        return unsafe.getAndAddLong(this, valueOffset, 1L);
-    }
-```
-
-```java
- public final long getAndAddLong(Object var1, long var2, long var4) {
-        long var6;
-        do {
-            // 通过实例得引用var1 + 偏移量var2 获取现在得值，这样获取到的是内存中最新的值，是满足可见性的
-            var6 = this.getLongVolatile(var1, var2);
-            // 然后这里在进行cas操作来实现变量的数据更新 var6 旧值，var6 + var4新值
-        } while(!this.compareAndSwapLong(var1, var2, var6, var6 + var4));
-        return var6;
-    }
-```
+[AQS](AQS.md)
 
 # Locks(锁)
 
@@ -320,10 +206,6 @@ private void doSignalAll(Node first) {
 | public static void parkNanos(long nanos)    | 在**park**基础上增加了超时机制                               |
 | public static void parkUntil(long deadline) | 阻塞当前线程直到deadline时间（是1970年到deadline的毫秒数）   |
 | public static void unpark(Thread thread)    | 唤醒处于阻塞状态的线程                                       |
-
-## AQS(AbstractQueuedLongSynchronizer)
-
-[AQS](AQS.md)
 
 ## ReentrantLock
 
@@ -1599,7 +1481,7 @@ public class Semaphore implements java.io.Serializable {
                     return;
             }
         }
-		// 获取，并返回所有可获得的锁，相当于一次吧所有生息阿德可获得锁都取走了
+		// 获取，并返回所有可获得的锁，相当于一次吧所有的可获得的锁都取走了
         final int drainPermits() {
             for (;;) {
                 int current = getState();
@@ -1756,10 +1638,12 @@ protected void reducePermits(int reduction) {
 
 ## Exchanger
 
+**这个没写源码解读是因为个人看了一遍没看懂，以后如果对这个类的源码有了较好的理解之后会补充上这个**
+
 线程间交换数据，用于线程间协作，它提供一个同步点，在这个同步点，两个线程可以交换彼此的数据，这两个线程通过 exchange方法交换数据，如果第一个线程先执行exchange()方法，它会一直等待第二个线程也 执行exchange方法，当两个线程都到达同步点时，这两个线程就可以交换数据，将本线程生产
 出来的数据传递给对方。
 
-Exchanger可以用于遗传算法，遗传算法里需要选出两个人作为交配对象，这时候会交换 两人的数据，并使用交叉规则得出2个交配结果。Exchanger也可以用于校对工作，比如我们需 要将纸制银行流水通过人工的方式录入成电子银行流水，为了避免错误，采用AB岗两人进行 录入，录入到Excel之后，系统需要加载这两个Excel，并对两个Excel数据进行校对，看看是否 录入一致
+Exchanger可以用于遗传算法，遗传算法里需要选出两个人作为交配对象，这时候会交换 两人的数据，并使用交叉规则得出2个交配结果。Exchanger也可以用于校对工作，比如我们需要将纸制银行流水通过人工的方式录入成电子银行流水，为了避免错误，采用AB岗两人进行录入，录入到Excel之后，系统需要加载这两个Excel，并对两个Excel数据进行校对，看看是否录入一致
 
 ```java
 public class ExchangerTest { 
@@ -1808,3 +1692,124 @@ public class ExchangerTest {
     volatile Thread parked; // Set to this thread when parked, else null 停车....
 }
 ```
+
+# 原子变量类
+
+## 分类
+
+基本类型：
+
+* AtomicBoolean 
+* AtomicInteger
+* AtomicLong
+* AtomicIntegerFieldUpdater
+* AtomicLongFieldUpdater
+
+[1.8 新增的几个 处理类](Atomic/1.8新增.md)
+
+* LongAdder 高并发情况下比AtomicLong的表现要好，但是不能完全替代AtomicLong，具体的看[为什么要引入LongAdder](Atomic/1.8新增.md )
+* LongAccumulator
+* DoubleAdder
+* DoubleAccumulator
+
+reference: 
+
+* [AtomicReference](Atomic/AtomicReference.md)
+* [AtomicIntegerFieldUpdater](Atomic/AtomicIntegerFieldUpdater.md)
+* [AtomicStampedReference](Atomic/AtomicStampedReference.md)
+* [AtomicMarkableReference](Atomic/AtomicMarkableReference.md)
+
+数组：
+
+* AtomicIntegerArray 
+* AtomicLongArray
+* AtomicReferenceArray
+
+## lazySet
+
+**我们很多原子类中都有 lazySet这样的方法，lazy 就是在不需要让共享变量的修改立刻让其他线程可见的时候，以设置普通变量的方式来修改该变量，以减少不必要的内存屏障，从而提高程序执行的效率**
+
+## 实现原理
+
+这些类的实现在 java.util.concurrent.atomic包下。
+
+我们java中并发下实现原子操作可以使用 **锁** 或 **通过循环CAS来实现原子操作（自旋）**,而我们的原子变量类都是使用的CAS。
+
+举例我们来看看基本类型的原子变量AtomicLong的源代码，主要的字段：value字段，和valueOffset字段。下面源码中有注释
+
+```java
+public class AtomicLong extends Number implements java.io.Serializable {
+    private static final long serialVersionUID = 1927816293512124184L;
+
+    // setup to use Unsafe.compareAndSwapLong for updates
+    private static final Unsafe unsafe = Unsafe.getUnsafe();
+    // 这个值是我们数据在内存中的偏移量，查询值得时候通过这个找到内存中保存的value得值
+    private static final long valueOffset;
+
+    /**
+     * Records whether the underlying JVM supports lockless
+     * compareAndSwap for longs. While the Unsafe.compareAndSwapLong
+     * method works in either case, some constructions should be
+     * handled at Java level to avoid locking user-visible locks.
+     */
+    static final boolean VM_SUPPORTS_LONG_CAS = VMSupportsCS8();
+
+    /**
+     * Returns whether underlying JVM supports lockless CompareAndSet
+     * for longs. Called only once and cached in VM_SUPPORTS_LONG_CAS.
+     */
+    private static native boolean VMSupportsCS8();
+
+    static {
+        try {
+            valueOffset = unsafe.objectFieldOffset
+                (AtomicLong.class.getDeclaredField("value"));
+        } catch (Exception ex) { throw new Error(ex); }
+    }
+	// 使用volatile存储我们的实际的值，保证了数据的可见性
+    private volatile long value;
+
+    /**
+     * Creates a new AtomicLong with the given initial value.
+     *
+     * @param initialValue the initial value
+     */
+    public AtomicLong(long initialValue) {
+        value = initialValue;
+    }
+
+    /**
+     * Creates a new AtomicLong with initial value {@code 0}.
+     */
+    public AtomicLong() {
+    }
+    // 剩下的省略掉
+}
+```
+
+然后我们再来看看一个修改数据得方法具体的实现，别的放大都大同小异就不做过多说明
+
+```java
+ /**
+     * Atomically increments by one the current value.
+     *
+     * @return the previous value
+     */
+    public final long getAndIncrement() {
+        return unsafe.getAndAddLong(this, valueOffset, 1L);
+    }
+```
+
+```java
+ public final long getAndAddLong(Object var1, long var2, long var4) {
+        long var6;
+        do {
+            // 通过实例得引用var1 + 偏移量var2 获取现在得值，这样获取到的是内存中最新的值，是满足可见性的
+            var6 = this.getLongVolatile(var1, var2);
+            // 然后这里在进行cas操作来实现变量的数据更新 var6 旧值，var6 + var4新值
+        } while(!this.compareAndSwapLong(var1, var2, var6, var6 + var4));
+        return var6;
+    }
+```
+
+# 
