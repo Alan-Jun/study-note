@@ -13,7 +13,7 @@
 
 如下图：
 
-![image-20210407174740264](/Users/ypp/Library/Application Support/typora-user-images/image-20210407174740264.png)
+![image-20210413192525335](java并发.assets/image-20210413192525335.png)
 
 
 
