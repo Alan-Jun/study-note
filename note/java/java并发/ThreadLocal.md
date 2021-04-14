@@ -1,8 +1,22 @@
 ## ThreadLocal是什么
 
-ThreadLocal是一个本地线程副本变量工具类。主要用于将私有线程和该线程存放的副本对象做一个映射，各个线程之间的变量互不干扰，在高并发场景下，可以实现无状态的调用，特别适用于各个线程依赖不同的变量值完成操作的场景。
+ThreadLocal是一个本地线程副本变量工具类。**ThreadLocal 适用于每个线程需要自己独立的实例且该实例需要在多个方法中被使用，也即变量在线程间隔离而在方法或类间共享的场景。**
 
-## 从数据结构入手
+## ThreadLocal类的几个核心方法
+
+```java
+public T get()
+public void set(T value)
+public void initialValue()
+public void remove()
+```
+
+- get()方法用于获取当前线程的副本变量值。
+- set()方法用于保存当前线程的副本变量值。
+- initialValue()为当前线程初始副本变量值。
+- remove()方法移除当前前程的副本变量值（**防止内存泄漏的根本解决方案，后文中会介绍 ThreadLocal的内存泄漏问题**）。
+
+## ThreadLocal的数据结构
 
 **下图为ThreadLocal的内部结构图**
 
@@ -26,170 +40,19 @@ public class Thread implements Runnable {
 }
 ```
 
-## 深入解析ThreadLocal
+## ThreadLocalMap
 
-ThreadLocal类提供如下几个核心方法：
+### 介绍
 
-```java
-public T get()
-public void set(T value)
-public void initialValue()
-public void remove()
-```
+上文中我们了解到了ThreadLocalMap是java.lang.ThreadLocal类的静态内部类。ThreadLocalMap主要是作为成员变量，应用在java.lang.Thread类。探索ThreadLocalMap，有助于理解多线程并发环境下ThreadLocal的实现原理。它没有实现Map接口，而是用独立的方式实现了Map的功能，其内部的Entry也独立实现。
 
-- get()方法用于获取当前线程的副本变量值。
-- set()方法用于保存当前线程的副本变量值。
-- initialValue()为当前线程初始副本变量值。
-- remove()方法移除当前前程的副本变量值。
+ThreadLocalMap类图：
 
-### get()方法
-
-```java
-/**
- * Returns the value in the current thread's copy of this
- * thread-local variable.  If the variable has no value for the
- * current thread, it is first initialized to the value returned
- * by an invocation of the {@link #initialValue} method.
- *
- * @return the current thread's value of this thread-local
- */
-public T get() {
-    Thread t = Thread.currentThread();
-    ThreadLocalMap map = getMap(t);
-    if (map != null) {
-        ThreadLocalMap.Entry e = map.getEntry(this);
-        if (e != null)
-            return (T)e.value;
-    }
-    return setInitialValue();
-}
-
-ThreadLocalMap getMap(Thread t) {
-    return t.threadLocals;
-}
-
-private T setInitialValue() {
-    T value = initialValue();
-    Thread t = Thread.currentThread();
-    ThreadLocalMap map = getMap(t);
-    if (map != null)
-        map.set(this, value);
-    else
-        createMap(t, value);
-    return value;
-}
-
-protected T initialValue() {
-    return null;
-}
-```
-
-步骤：
-1.获取当前线程的ThreadLocalMap对象threadLocals
-2.从map中获取线程存储的K-V Entry节点。
-3.从Entry节点获取存储的Value副本值返回。
-4.map为空的话返回初始值null，即线程变量副本为null，在使用时需要注意判断NullPointerException。
-
-### set()方法
-
-```java
-/**
- * Sets the current thread's copy of this thread-local variable
- * to the specified value.  Most subclasses will have no need to
- * override this method, relying solely on the {@link #initialValue}
- * method to set the values of thread-locals.
- *
- * @param value the value to be stored in the current thread's copy of
- *        this thread-local.
- */
-public void set(T value) {
-    Thread t = Thread.currentThread();
-    ThreadLocalMap map = getMap(t);
-    if (map != null)
-        map.set(this, value);
-    else
-        createMap(t, value);
-}
-
-ThreadLocalMap getMap(Thread t) {
-    return t.threadLocals;
-}
-
-void createMap(Thread t, T firstValue) {
-    t.threadLocals = new ThreadLocalMap(this, firstValue);
-}
-
-private void set(ThreadLocal<?> key, Object value) {
-
-    // We don't use a fast path as with get() because it is at
-    // least as common to use set() to create new entries as
-    // it is to replace existing ones, in which case, a fast
-    // path would fail more often than not.
-    
-    Entry[] tab = table;
-    int len = tab.length;
-    int i = key.threadLocalHashCode & (len-1);
-
-    for (Entry e = tab[i] ; e != null ; e = tab[i = nextIndex(i, len)]) {// 如果找不到，就线性探测
-        ThreadLocal<?> k = e.get();
-		// key不存在,说明之前的ThreadLocal对象被回收了
-        if (k == key) {
-            e.value = value;
-            return;
-        }
-		// key不存在,说明之前的ThreadLocal对象被回收了，持有该ThreadLocal的线程释放了该，
-        if (k == null) {
-            replaceStaleEntry(key, value, i);
-            return;
-        }
-    }
-
-    tab[i] = new Entry(key, value);
-    int sz = ++size;
-    if (!cleanSomeSlots(i, sz) && sz >= threshold)
-        rehash();
-}
-```
-
-步骤：
-1.获取当前线程的成员变量map
-2.map非空，则重新将ThreadLocal和新的value副本放入到map中。
-3.map空，则对线程的成员变量ThreadLocalMap进行初始化创建，并将ThreadLocal和value副本放入map中。
-
-### remove()方法
-
-```java
-/**
- * Removes the current thread's value for this thread-local
- * variable.  If this thread-local variable is subsequently
- * {@linkplain #get read} by the current thread, its value will be
- * reinitialized by invoking its {@link #initialValue} method,
- * unless its value is {@linkplain #set set} by the current thread
- * in the interim.  This may result in multiple invocations of the
- * <tt>initialValue</tt> method in the current thread.
- *
- * @since 1.5
- */
-public void remove() {
- ThreadLocalMap m = getMap(Thread.currentThread());
- if (m != null)
-     m.remove(this);
-}
-
-ThreadLocalMap getMap(Thread t) {
-    return t.threadLocals;
-}
-```
-
-remove方法比较简单，不做赘述。
-
-### ThreadLocalMap
-
-ThreadLocalMap是ThreadLocal的内部类，没有实现Map接口，用独立的方式实现了Map的功能，其内部的Entry也独立实现。ThreadLocalMap类图：
-
-![image-20200507230420344](assets\image-20200507230420344.png)
+![image-20200507230420344](assets/image-20200507230420344.png?lastModify=1618396741)
 
 在ThreadLocalMap中，也是用Entry来保存K-V结构数据的。但是Entry中key只能是ThreadLocal对象，这点被Entry的构造方法已经限定死了。
+
+### Entry
 
 ```java
 // WeakReference<ThreadLocal> 意味着 ThreadLocal会被弱引用持有，任何一次gc都可能回收它（如果它的内存区在这次gc回收的区域）
@@ -204,7 +67,7 @@ static class Entry extends WeakReference<ThreadLocal> {
 }
 ```
 
-Entry继承自WeakReference（弱引用，生命周期只能存活到下次GC前），但只有Key是弱引用类型的，Value并非弱引用。
+Entry继承自WeakReference，包括两个元素，一个ThreadLocal 类型的成员和一个Object类型的成员value。其中ThreadLocal 类型的成员是一个弱引用，其特点是，当引用元素无强引用时，JVM GC时会立即回收引用元素。关于引用着一块大家可以去了解一下关于Java强引用、软引用、弱引用、幽灵引用相关的知识
 
 ThreadLocalMap的成员变量：
 
@@ -218,6 +81,8 @@ static class ThreadLocalMap {
     /**
      * The table, resized as necessary.
      * table.length MUST always be a power of two.
+     * 容器，他的大小必须是 2次方，这一点和hashMap的设计是相同的，这样的设计可以使用 hashCode &    	     
+     * (length - 1) 来快速定位索引
      */
     private Entry[] table;
 
@@ -235,9 +100,11 @@ static class ThreadLocalMap {
 
 ### Hash冲突怎么解决
 
+#### 斐波那契散列乘数
+
 #### 线性探测
 
-和HashMap的最大的不同在于，ThreadLocalMap结构非常简单，没有next引用，也就是说ThreadLocalMap中解决Hash冲突的方式并非链表的方式，而是采用线性探测的方式，所谓线性探测，就是根据初始key的hashcode值确定元素在table数组中的位置，如果发现这个位置上已经有其他key值的元素被占用，则利用固定的算法寻找一定步长的下个位置，依次判断，直至找到能够存放的位置。
+ThreadLocalMap和HashMap的最大的不同在于，ThreadLocalMap结构非常简单，没有next引用，也就是说ThreadLocalMap中解决Hash冲突的方式并非链表的方式，而是采用**线性探测**的方式，所谓线性探测，就是根据初始key的hashcode值确定元素在table数组中的位置，如果发现这个位置上已经有其他key值的元素被占用，则利用固定的算法寻找一定步长的下个位置，依次判断，直至找到能够存放的位置。
 
 ThreadLocalMap解决Hash冲突的方式就是简单的步长加1或减1，寻找下一个相邻的位置。
 
@@ -259,39 +126,13 @@ private static int prevIndex(int i, int len) {
 
 显然ThreadLocalMap采用线性探测的方式解决Hash冲突的效率很低，如果有大量不同的ThreadLocal对象放入map中时发送冲突，或者发生二次冲突，则效率很低。
 
-**所以这里引出的良好建议是：每个线程只存一个变量，这样的话所有的线程存放到map中的Key都是相同的ThreadLocal，如果一个线程要保存多个变量，就需要创建多个ThreadLocal，多个ThreadLocal放入Map中时会极大的增加Hash冲突的可能。**
+为了降低冲突机率提高效率，ThreadLocal 实例的HashCode 采用了 用斐波那契散列乘数使hash分布更均匀
+
+看 ThreadLocal源码就会发现 每次`new ThreadLocal`时因为threadLocalHashCode的初始化，会使threadLocalHashCode值自增一次，增量设计师这个斐波那契散列乘数 0x61c88647。
+
+![image-20210414202607383](assets/image-20210414202607383.png)
 
 #### 用斐波那契散列乘数使hash分布更均匀
-
-```java
-public class ThreadLocal<T> {
-   	/**
-   	 * 每一个实例创建都会去生成一个新 hashcode
-   	 */
-    private final int threadLocalHashCode = nextHashCode();
-
-    /**
-     * 通过 static 的 atomic 计数器，辅助 为 每一个 ThreadLocal 实例生成hashcode
-     */
-    private static AtomicInteger nextHashCode =
-        new AtomicInteger();
-
-    /**
-     * 0x61c88647是斐波那契散列乘数,它的优点是通过它散列(hash)出来的结果分布会比较均匀，可以很大程度上避免hash冲突
-     * 
-     */
-    private static final int HASH_INCREMENT = 0x61c88647;
-
-    /**
-     * Returns the next hash code.
-     */
-    private static int nextHashCode() {
-        return nextHashCode.getAndAdd(HASH_INCREMENT);
-    }
-}
-```
-
-同时在每次`new ThreadLocal`时因为threadLocalHashCode的初始化，会使threadLocalHashCode值自增一次，增量为0x61c88647。
 
 **0x61c88647是斐波那契散列乘数,它的优点是通过它散列(hash)出来的结果分布会比较均匀，可以很大程度上避免hash冲突，已初始容量16为例，hash并与15位运算计算数组下标结果如下：**
 
@@ -307,99 +148,205 @@ public class ThreadLocal<T> {
 | 0xe443238  |    8     |
 | 0x700cb87f |    15    |
 
-### rehash
+### 构造器
 
 ```java
-private void setThreshold(int len) {
-    threshold = len * 2 / 3; // 负载因子
+ThreadLocalMap(ThreadLocal<?> firstKey, Object firstValue) {
+    table = new Entry[INITIAL_CAPACITY];
+    int i = firstKey.threadLocalHashCode & (INITIAL_CAPACITY - 1);
+    table[i] = new Entry(firstKey, firstValue);
+    size = 1;
+    setThreshold(INITIAL_CAPACITY);
 }
 ```
 
 ```java
-private void resize() {
-    Entry[] oldTab = table;
-    int oldLen = oldTab.length;
-    int newLen = oldLen * 2;
-    Entry[] newTab = new Entry[newLen];
-    int count = 0;
+private ThreadLocalMap(ThreadLocalMap parentMap) {
+    Entry[] parentTable = parentMap.table;
+    int len = parentTable.length;
+    setThreshold(len);
+    table = new Entry[len];
 
-    for (int j = 0; j < oldLen; ++j) {
-        Entry e = oldTab[j];
+    for (int j = 0; j < len; j++) {
+        Entry e = parentTable[j];
         if (e != null) {
-            ThreadLocal<?> k = e.get();
-            if (k == null) {
-                e.value = null; // Help the GC
-            } else {
-                int h = k.threadLocalHashCode & (newLen - 1);
-                while (newTab[h] != null)
-                    h = nextIndex(h, newLen);
-                newTab[h] = e;
-                count++;
+            @SuppressWarnings("unchecked")
+            ThreadLocal<Object> key = (ThreadLocal<Object>) e.get();
+            if (key != null) {
+                Object value = key.childValue(e.value);
+                Entry c = new Entry(key, value);
+                int h = key.threadLocalHashCode & (len - 1);
+                while (table[h] != null)
+                    h = nextIndex(h, len);// 线性探测
+                table[h] = c;
+                size++;
             }
         }
     }
-    setThreshold(newLen);
-    size = count;
-    table = newTab;
 }
 ```
 
-### [ThreadLocalMap的问题](https://blog.csdn.net/luoyeyeyu/article/details/86616682)
+根据传入批量Entries，将所有Key非空Entry设置到该类Entry数组
 
-由于ThreadLocalMap的key是弱引用，而Value是强引用。这就导致了一个问题，ThreadLocal在没有外部对象强引用时，发生GC时弱引用Key会被回收，而Value不会回收，如果创建ThreadLocal的线程一直持续运行，那么这个Entry对象中的value就有可能一直得不到回收，发生内存泄露。**我比较不理解的是，我么在神什么情况下才会在不强引用的时候使用它**
+### Expunge（内存擦除）
 
-**如何避免泄漏**
-既然Key是弱引用，那么我们要做的事，就是在调用ThreadLocal的get()、set()方法时完成后再调用remove方法，将Entry节点和Map的引用关系移除，这样整个Entry对象在GC Roots分析后就变成不可达了，下次GC的时候就可以被回收。
+Entry对象Key为弱引用，当Key所指对象无强引用时，JVM GC时会自动回收该对象，从而造成Entry状态变为STALE（ Entry.get()==null  就说明Entry的状态是STALE），即无效状态。此时，必须对该Entry对象及其Value引用进行擦除，防止内存泄漏。
 
-如果使用ThreadLocal的set方法之后，没有显示的调用remove方法，就有可能发生内存泄露，所以养成良好的编程习惯十分重要，使用完ThreadLocal之后，记得调用remove方法。
+#### expungeStaleEntry
 
-```java
-ThreadLocal<Session> threadLocal = new ThreadLocal<Session>();
-try {
-    threadLocal.set(new Session(1, "Misout的博客"));
-    // 其它业务逻辑
-} finally {
-    threadLocal.remove();
-}
-```
-
-### 应用场景
-
-还记得Hibernate的session获取场景吗？
+基础擦除方法
 
 ```java
-private static final ThreadLocal<Session> threadLocal = new ThreadLocal<Session>();
+/**
+ * 从 staleSlot 开始知道遇到第一个 空的位置，将沿途发现的所有 STALE状态的Entry清理，同时如果发现
+ * 非STALE状态Entry，如果发现他的hash值计算得到索引位置 h 和 他当前的位置i不想等则重新给他找位置
+ **/
+private int expungeStaleEntry(int staleSlot) {
+    Entry[] tab = table;
+    int len = tab.length;
 
-//获取Session
-public static Session getCurrentSession(){
-    Session session =  threadLocal.get();
-    //判断Session是否为空，如果为空，将创建一个session，并设置到本地线程变量中
-    try {
-        if(session ==null&&!session.isOpen()){
-            if(sessionFactory==null){
-                rbuildSessionFactory();// 创建Hibernate的SessionFactory
-            }else{
-                session = sessionFactory.openSession();
+    // expunge entry at staleSlot
+    tab[staleSlot].value = null;
+    tab[staleSlot] = null;
+    size--;
+
+    // Rehash until we encounter null
+    Entry e;
+    int i;
+    for (i = nextIndex(staleSlot, len);
+         (e = tab[i]) != null;
+         i = nextIndex(i, len)) {
+        ThreadLocal<?> k = e.get();
+        if (k == null) {
+            e.value = null;
+            tab[i] = null;
+            size--;
+        } else {
+            int h = k.threadLocalHashCode & (len - 1);
+            if (h != i) {
+                tab[i] = null;
+
+                // Unlike Knuth 6.4 Algorithm R, we must scan until
+                // null because multiple entries could have been stale.
+               // 从新给 i这个位置的entry找位置
+                while (tab[h] != null)
+                    h = nextIndex(h, len);
+                tab[h] = e;
             }
         }
-        threadLocal.set(session);
-    } catch (Exception e) {
-        // TODO: handle exception
     }
-
-    return session;
+    return i;
 }
 ```
 
-为什么？每个线程访问数据库都应当是一个独立的Session会话，如果多个线程共享同一个Session会话，有可能其他线程关闭连接了，当前线程再执行提交时就会出现会话已关闭的异常，导致系统异常。此方式能避免线程争抢Session，提高并发下的安全性。
+#### cleanSomeSlots
 
-使用ThreadLocal的典型场景正如上面的数据库连接管理，线程会话管理等场景，只适用于独立变量副本的情况，如果变量为全局共享的，则不适用在高并发下使用。
+部分擦除
 
-### 总结
+```java
+private boolean cleanSomeSlots(int i, int n) {
+    boolean removed = false;
+    Entry[] tab = table;
+    int len = tab.length;
+    do {
+        i = nextIndex(i, len);
+        Entry e = tab[i];
+        if (e != null && e.get() == null) {
+            n = len;
+            removed = true;
+            i = expungeStaleEntry(i);
+        }
+    } while ( (n >>>= 1) != 0);
+    return removed;
+}
+```
 
-- 每个ThreadLocal只能保存一个变量副本，如果想要一个线程能够保存多个副本以上，就需要创建多个ThreadLocal。
-- 由于 ThreadLocal  使用的斐波T那契散列乘数使hash分布更均匀，已初始容量16为例，hash并与15位运算计算数组不会产生任何冲突，正常安全使用 ThreadLocal  的情况下是存在hash冲突的（比如一个线程正常强引用 ThreadLocal  ，数量别超过16，避免rehash，避免冲突）
-- ThreadLocal内部的ThreadLocalMap键为弱引用，会有内存泄漏的风险。要注意使用完记得 remove()
-- 适用于无状态，副本变量独立后不影响业务逻辑的高并发场景。如果如果业务逻辑强依赖于副本变量，则不适合用ThreadLocal解决，需要另寻解决方案。
+#### expungeStaleEntries
 
-> 出自 https://www.cnblogs.com/kancy/p/10702310.html
+全表擦除
+
+```java
+private void expungeStaleEntries() {
+    Entry[] tab = table;
+    int len = tab.length;
+    for (int j = 0; j < len; j++) {
+        Entry e = tab[j];
+        if (e != null && e.get() == null)
+            expungeStaleEntry(j);
+    }
+}
+```
+
+### set 方法
+
+```java
+private void set(ThreadLocal<?> key, Object value) {
+
+    // We don't use a fast path as with get() because it is at
+    // least as common to use set() to create new entries as
+    // it is to replace existing ones, in which case, a fast
+    // path would fail more often than not.
+
+    Entry[] tab = table;
+    int len = tab.length;
+    // 计算索引
+    int i = key.threadLocalHashCode & (len-1);
+
+    for (Entry e = tab[i];
+         e != null;
+         e = tab[i = nextIndex(i, len)]) {
+        ThreadLocal<?> k = e.get();
+
+        if (k == key) {// 找到之后直接替换
+            e.value = value;
+            return;
+        }
+
+        if (k == null) {// STALE状态Entry，执行替换方法，并直接返回
+            replaceStaleEntry(key, value, i);
+            return;
+        }
+    }
+		// 空位存入
+    tab[i] = new Entry(key, value);
+    int sz = ++size;
+    /**
+     * 判断Entry数组是否需要扩容；因为此处Entry数组新增了一个Entry，所以首先执行一次启发式擦除过程，如
+     * 果成功擦除了元素，表明Entry数组并无变大，不需要扩容，否则，新增一个元素后，如果Entry数组大小大于
+     * 阈值，则进行扩容。
+     **/
+    if (!cleanSomeSlots(i, sz) && sz >= threshold)
+        rehash();
+}
+```
+
+
+
+### getEntry 方法
+
+```java
+private Entry getEntry(ThreadLocal<?> key) {
+            int i = key.threadLocalHashCode & (table.length - 1);
+            Entry e = table[i];
+            if (e != null && e.get() == key)
+                return e;
+            else
+                return getEntryAfterMiss(key, i, e);
+        }
+```
+
+
+
+## ThreadLocal 内存泄漏问题
+
+有了上面我们的 ThreadLocal 的介绍，我们知道 ThreadLocal 在使用的时候会给每一个是用到它的线程创建一个 ThreadLocalMap 用来存放线程各自的副本，我们知道通常我们的线程的使用都是利用到线程池的，还有就是在一个服务系统中很可能线程池中的这些线程都是不会销毁的，也就是说如果有100个这样的线程没有销毁，在只有一个TheadLocal变量的时候，这100个线程中就存在 100个 ThreadLocalMap，以及 100个ThreadLocalMap 中会分别存放一个 entry；在这样的情况下，我们就会面临两种内存泄漏情况：
+
+* 一种是 TheadLocal 是被强引用的情况：由于 TheadLocal 变量被强引用着，无法对其内存进行擦出，会导致上面免俗的 100个entry的内存泄露
+* 一种是其被弱引用的情况：这个是 Josh Bloch 和 Doug Lea 对TheadLocal 的优化，为了避免非 static TheadLocal变量内存泄漏设计的，内存擦出方案，利用弱饮用的特性在，线程执行完成之后，非 static TheadLocal变量的引用被移除线程虚拟机栈之后发生gc回收之后，标记这一块Entry实例是可以擦出的，在TheadLocalMap的get，set方法中会执行这样的擦出工作防止内存泄漏，如果不使用弱饮用来这几Entry的key, 那么我们上面描述的这100份内存会一直存在那，也就是这些内存泄漏了
+
+上面我们描述的只是 单个 TheadLocal 且 只有100线程的场景，如果是 10个200线程呢，那就是2000个entry的泄漏，所以为了避免这样的问题，最根本的是在使用完成之后调用 ThreadLocal#remove方法
+
+**关于内存擦出可以在后问的源码解读中了解**
+
+### 
+

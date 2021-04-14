@@ -57,7 +57,7 @@ SoftReference<String> softRef=new SoftReference<String>(str);     // 软引用
 
 ```java
 If(JVM.内存不足()) {
-   str = null;  // 转换为软引用
+   str = null;
    System.gc(); // 垃圾回收器进行回收
 }
 ```
@@ -91,26 +91,58 @@ if(sr.get()!=null){
 
 弱引用与软引用的区别在于：只具有弱引用的对象拥有更短暂的生命周期。在垃圾回收器线程扫描它所管辖的内存区域的过程中，一旦发现了**只**具有弱引用的对象，不管当前内存空间足够与否，都会回收它的内存。不过，由于垃圾回收器是一个优先级很低的线程，因此不一定会很快发现那些只具有弱引用的对象。 
 
-## 为什么使用弱引用？
-
-考虑下面的场景：现在有一个Product类代表一种产品，这个类被设计为不可扩展的，而此时我们想要为每个产品增加一个编号。一种解决方案是使用HashMap<Product, Integer>。于是问题来了，如果我们已经不再需要一个Product对象存在于内存中（比如已经卖出了这件产品），假设指向它的引用为productA，我们这时会给productA赋值为null，然而这时productA过去指向的Product对象并不会被回收，因为它显然还被HashMap引用着。所以这种情况下，我们想要真正的回收一个Product对象，仅仅把它的强引用赋值为null是不够的，还要把相应的条目从HashMap中移除。显然“从HashMap中移除不再需要的条目”这个工作我们不想自己完成，我们希望告诉垃圾收集器：在只有HashMap中的key在引用着Product对象的情况下，就可以回收相应Product对象了。显然，根据前面弱引用的定义，使用弱引用能帮助我们达成这个目的。我们只需要用一个指向Product对象的弱引用对象来作为HashMap中的key就可以了。
-
 ## 如何使用弱引用？
 
-拿上面介绍的场景举例，我们使用一个指向Product对象的弱引用对象来作为HashMap的key，只需这样定义这个弱引用对象：
+java中为我们提供了一个 WeakReference 类，他就是一个弱饮用
 
 ```java
-Product productA = new Product(...);
-WeakReference<Product> weakProductA = new WeakReference<>(productA);
+public class WeakReference<T> extends Reference<T> {
+
+    public WeakReference(T referent) {
+        super(referent);
+    }
+
+    /**
+     * Creates a new weak reference that refers to the given object and is
+     * registered with the given queue.
+     *
+     * @param referent object the new weak reference will refer to
+     * @param q the queue with which the reference is to be registered,
+     *          or <tt>null</tt> if registration is not required
+     */
+    public WeakReference(T referent, ReferenceQueue<? super T> q) {
+        super(referent, q);
+    }
+
+}
 ```
 
-现在，若引用对象weakProductA就指向了Product对象productA。那么我们怎么通过weakProduct获取它所指向的Product对象productA呢？很简单，只需要下面这句代码：
+参数中的 referent 就是我们需要被弱饮用的对象，也就是说如果发生gc,这个referent会被回收，但是 WeakReference 对象本身不会被回收。
+
+比如下面这个代码
 
 ```java
-Product product = weakProductA.get();
+public static void main(String[] args) {
+        WeakReferenceDemo salad = new WeakReferenceDemo(new Apple(),"aaaa");
+        //通过WeakReference的get()方法获取Apple
+        System.out.println("Apple:" + salad.get());
+        System.gc();
+        try {
+            //休眠一下，在运行的时候加上虚拟机参数-XX:+PrintGCDetails，输出gc信息，确定gc发生了。
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        //如果为空，代表被回收了
+        if (salad.get() == null) {
+            System.out.println("clear Apple。");
+            System.out.println(" salad :" + salad + "  obj:" + salad.a);
+        }
+    }
 ```
 
-实际上，对于这种情况，Java类库为我们提供了WeakHashMap类，使用和这个类，它的键自然就是弱引用对象，无需我们再手动包装原始对象。这样一来，当productA变为null时（表明它所引用的Product已经无需存在于内存中），这时指向这个Product对象的就是由弱引用对象weakProductA了，那么显然这时候相应的Product对象时弱可达的，所以指向它的弱引用会被清除，这个Product对象随即会被回收，指向它的弱引用对象会进入引用队列中。
+最后我们会发现 Apple实例被回收了，但是 WeakReferenceDemo的实力对象 salad 正常
 
 ## 引用队列
 
