@@ -20,7 +20,7 @@ public void remove()
 
 **下图为ThreadLocal的内部结构图**
 
-![image-20200507230253190](assets\image-20200507230253190.png)
+![image-20200507230253190](assets/image-20200507230253190.png))
 
 从上面的结构图，我们已经窥见ThreadLocal的核心机制：
 
