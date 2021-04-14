@@ -48,7 +48,7 @@ public class Thread implements Runnable {
 
 ThreadLocalMap类图：
 
-![image-20200507230420344](assets/image-20200507230420344.png?lastModify=1618396741)
+![image-20200507230420344](assets/image-20200507230420344.png)
 
 在ThreadLocalMap中，也是用Entry来保存K-V结构数据的。但是Entry中key只能是ThreadLocal对象，这点被Entry的构造方法已经限定死了。
 
