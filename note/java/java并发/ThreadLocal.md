@@ -313,14 +313,70 @@ private void set(ThreadLocal<?> key, Object value) {
     /**
      * 判断Entry数组是否需要扩容；因为此处Entry数组新增了一个Entry，所以首先执行一次启发式擦除过程，如
      * 果成功擦除了元素，表明Entry数组并无变大，不需要扩容，否则，新增一个元素后，如果Entry数组大小大于
-     * 阈值，则进行扩容。
+     * 阈值（length的2/3），则进行扩容。
      **/
     if (!cleanSomeSlots(i, sz) && sz >= threshold)
         rehash();
 }
 ```
 
+### replaceStaleEntry
 
+```java
+private void replaceStaleEntry(ThreadLocal<?> key, Object value,
+                               int staleSlot) {
+    Entry[] tab = table;
+    int len = tab.length;
+    Entry e;
+
+    // 从当前staleSlot向前探寻其它STALE元素，遇到空元素结束；
+    int slotToExpunge = staleSlot;
+    for (int i = prevIndex(staleSlot, len);
+         (e = tab[i]) != null;
+         i = prevIndex(i, len))
+        if (e.get() == null)
+            slotToExpunge = i;
+
+		// 从当前staleSlotd的下一个元素stale_i，开始遍历，如果查找到包含传参key的Entry，即key_i，则交换stale_i和key_i两个Entry，并从确定的STALE元素位置开始擦除操作，再从结束位置开始 cleanSomeSlots 擦除；
+    for (int i = nextIndex(staleSlot, len);
+         (e = tab[i]) != null;
+         i = nextIndex(i, len)) {
+        ThreadLocal<?> k = e.get();
+
+        // If we find key, then we need to swap it
+        // with the stale entry to maintain hash table order.
+        // The newly stale slot, or any other stale slot
+        // encountered above it, can then be sent to expungeStaleEntry
+        // to remove or rehash all of the other entries in run.
+        if (k == key) {
+            e.value = value;
+
+            tab[i] = tab[staleSlot];
+            tab[staleSlot] = e;
+
+            // Start expunge at preceding stale entry if it exists
+            if (slotToExpunge == staleSlot)
+                slotToExpunge = i;
+            cleanSomeSlots(expungeStaleEntry(slotToExpunge), len);
+            return;
+        }
+
+        // If we didn't find stale entry on backward scan, the
+        // first stale entry seen while scanning for key is the
+        // first still present in the run.
+        if (k == null && slotToExpunge == staleSlot)
+            slotToExpunge = i;
+    }
+
+    // 如果未查到到包含传参key的Entry，则直接在staleSlot位置设置传参key对应Entry，
+    tab[staleSlot].value = null;
+    tab[staleSlot] = new Entry(key, value);
+
+    // 并从确定的slotToExpunge元素开始擦除操作，再从结束位置开始cleanSomeSlots擦除。
+    if (slotToExpunge != staleSlot)
+        cleanSomeSlots(expungeStaleEntry(slotToExpunge), len);
+}
+```
 
 ### getEntry 方法
 
@@ -331,11 +387,48 @@ private Entry getEntry(ThreadLocal<?> key) {
             if (e != null && e.get() == key)
                 return e;
             else
+              // 碰撞查找
                 return getEntryAfterMiss(key, i, e);
+        }
+
+private Entry getEntryAfterMiss(ThreadLocal<?> key, int i, Entry e) {
+            Entry[] tab = table;
+            int len = tab.length;
+
+            while (e != null) {
+                ThreadLocal<?> k = e.get();
+                if (k == key)
+                    return e;
+                if (k == null)// 内存擦除
+                    expungeStaleEntry(i);
+                else
+                    i = nextIndex(i, len);
+                e = tab[i];
+            }
+            return null;
         }
 ```
 
+### remove
 
+      /**
+         * Remove the entry for key.
+         */
+        private void remove(ThreadLocal<?> key) {
+            Entry[] tab = table;
+            int len = tab.length;
+            int i = key.threadLocalHashCode & (len-1);
+            for (Entry e = tab[i];
+                 e != null;
+                 e = tab[i = nextIndex(i, len)]) {
+                if (e.get() == key) {
+                    e.clear();
+                    expungeStaleEntry(i);
+                    return;
+                }
+            }
+        }
+在Entry数组中，删除指定Key的元素。如果找到待删除元素，首先将引用key值置空，然后从当前位置开始执行擦除过程。
 
 ## ThreadLocal 内存泄漏问题
 
@@ -346,7 +439,7 @@ private Entry getEntry(ThreadLocal<?> key) {
 
 上面我们描述的只是 单个 TheadLocal 且 只有100线程的场景，如果是 10个200线程呢，那就是2000个entry的泄漏，所以为了避免这样的问题，最根本的是在使用完成之后调用 ThreadLocal#remove方法
 
-**关于内存擦出可以在后问的源码解读中了解**
+
 
 ### 
 
