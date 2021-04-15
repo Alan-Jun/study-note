@@ -15,7 +15,7 @@ JUC就是我们的 j ava.util.current 这个并发工具包它包括了
 
 # AQS(AbstractQueuedLongSynchronizer)
 
-[AQS](AQS.md)
+一定要先看这篇[AQS](AQS.md)文章，不然没有这个只是储备下面的源码不易理解
 
 # Locks(锁)
 
