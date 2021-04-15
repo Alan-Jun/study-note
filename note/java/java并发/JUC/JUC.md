@@ -2,18 +2,16 @@
 
 JUC就是我们的 j ava.util.current 这个并发工具包它包括了
 
-* atomic 原子变量工具类
-* locks 锁工具类
+* [locks 锁工具类](#Locks(锁))
 * 并发容器 （list, map,queue,set 等容器的并发工具）
+* atomic 原子变量工具类
 * 线程池工具
 
 架构图：
 
 ![1539076608379](../assets/1539076608379.png)
 
-从图中我们可以很明显的了解到，JUC的整个实现的基础是CAS+volatile，然后再次基础上构建了我们的AQS(AbstractQueuedLongSynchronizer)，原子变量类，进而最终构建了我们最上层的工具，所以这里我们的文章讲解孙旭也将和架构图中的一样，从下到上，其中非阻塞数据结构也就是我们的 java容器相关的基础知识
-
-有关于CAS，volatile的详解请看：[并发编程中的重要概念](../并发编程中的重要概念.md) 介绍了volatile
+从图中我们可以很明显的了解到，JUC的整个实现的基础是CAS+volatile，然后再次基础上构建了我们的 [AQS(AbstractQueuedLongSynchronizer **队列同步器**，**它是用来构建锁或者其他同步组件的基础框架**）](#AQS(AbstractQueuedLongSynchronizer))，原子变量类，进而最终构建了我们最上层的工具，所以这里我们的文章讲解顺序也将和架构图中的一样，从下到上，其中非阻塞数据结构也就是我们的java容器相关的基础知识，有关于CAS，volatile的详解请看：[并发编程中的重要概念](../并发编程中的重要概念.md) 
 
 # AQS(AbstractQueuedLongSynchronizer)
 
