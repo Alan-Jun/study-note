@@ -40,21 +40,21 @@ JUC就是我们的 j ava.util.current 这个并发工具包它包括了
 
 | 接口                                                         | 描述                                                         |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| [void await() throws InterruptedException;](#await())        | 使当前线程进入wait状态，直到被通知signal()/signalAll()/中断，其中被signal，唤醒之后，要直到获取到该Condition关联的锁，才能从该方法返回 |
-| void awaitUninterruptibly();                                 | 和await方法类似，不过不响应中断                              |
-| [long awaitNanos(long nanosTimeout) throws InterruptedException;](#awaitNanos) | 和await方法类似增加了超时机制                                |
-| boolean await(long time, TimeUnit unit) throws InterruptedException; | 和await方法类似增加了超时机制                                |
-| boolean awaitUntil(Date deadline) throws InterruptedException; | 和await方法类似增加了超时机制（一直到某个时间）              |
+| void await() throws InterruptedException                     | 使当前线程进入wait状态，直到被通知signal()/signalAll()/中断，其中被signal，唤醒之后，要直到获取到该Condition关联的锁，才能从该方法返回 |
+| void awaitUninterruptibly()                                  | 和await方法类似，不过不响应中断                              |
+| long awaitNanos(long nanosTimeout) throws InterruptedException | 和await方法类似增加了超时机制                                |
+| boolean await(long time, TimeUnit unit) throws InterruptedException | 和await方法类似增加了超时机制                                |
+| boolean awaitUntil(Date deadline) throws InterruptedException | 和await方法类似增加了超时机制（一直到某个时间）              |
 | void signal();                                               | 相当于notify()                                               |
 | void signalAll();                                            | 相当于notifyAll()                                            |
 
-> 关于 wait() , notify(),notifyAll()  可以看[并发编程中的重要概念](../并发编程中的重要概念.md)13.2 节内容
+> 关于 wait() , notify(),notifyAll()  可以看[并发编程中的重要概念](../并发编程中的重要概念.md)
 >
 > [Lock源码](Lock源码.md)
 >
 > [Condition源码](Condition源码.md)
 >
-> 抛出该 InterruptedException 的方法，如果那个线程的中断状态被设置过，这个异常的处理机制中会重置该线程的中断状态。也就是interrupted的值会被重置
+> InterruptedException 关于线程中断相关的可以看  [并发编程中的重要概念](../并发编程中的重要概念.md)
 
 ### 结构图
 
