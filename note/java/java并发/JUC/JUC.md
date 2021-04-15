@@ -2,10 +2,10 @@
 
 JUC就是我们的 j ava.util.current 这个并发工具包它包括了
 
-* locks 锁工具类
-* atomic 原子变量工具类
-* 线程池
-* 并发容器 （list, map,queue,set 等容器的并发工具）
+* [locks 锁工具类](#Locks(锁)) : 看这个之前一定要先看 [AQS](#AQS(AbstractQueuedLongSynchronizer))
+* [atomic 原子变量工具类](#原子变量类)
+* [线程池](#线程池)
+* [并发容器 （list, map,queue,set 等容器的并发工具）](#并发容器)
 
 架构图：
 
