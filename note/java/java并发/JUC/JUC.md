@@ -238,8 +238,6 @@ public class ReentrantLockTest {
             } finally {
                 nonFairLock.unlock();
             }
-
-
         }
     }
 
