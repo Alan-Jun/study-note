@@ -3,9 +3,9 @@
 JUC就是我们的 j ava.util.current 这个并发工具包它包括了
 
 * [locks 锁工具类](#Locks(锁))
-* 并发容器 （list, map,queue,set 等容器的并发工具）
 * atomic 原子变量工具类
-* 线程池工具
+* [线程池](#线程池)
+* 并发容器 （list, map,queue,set 等容器的并发工具）
 
 架构图：
 
@@ -1723,10 +1723,6 @@ reference:
 * AtomicLongArray
 * AtomicReferenceArray
 
-## lazySet
-
-**我们很多原子类中都有 lazySet这样的方法，lazy 就是在不需要让共享变量的修改立刻让其他线程可见的时候，以设置普通变量的方式来修改该变量，以减少不必要的内存屏障，从而提高程序执行的效率**
-
 ## 实现原理
 
 这些类的实现在 java.util.concurrent.atomic包下。
@@ -1785,7 +1781,7 @@ public class AtomicLong extends Number implements java.io.Serializable {
 }
 ```
 
-然后我们再来看看一个修改数据得方法具体的实现，别的放大都大同小异就不做过多说明
+然后我们再来看看一个修改数据的方法具体的实现，别的原子工具类也都大同小异就不做过多说明
 
 ```java
  /**
@@ -1810,4 +1806,13 @@ public class AtomicLong extends Number implements java.io.Serializable {
     }
 ```
 
-# 
+# 线程池
+
+[线程池相关](../线程池.md)
+
+## 并发容器
+
+[关于队列，阻塞队列的更多信息](../../java集合/collection/queue/introduction.md)
+
+除此之外还有很多其他集合的文章，有兴趣的可以去看看，里面有map,list,set，queue等的文章：[java集合](../../java集合)
+

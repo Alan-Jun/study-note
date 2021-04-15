@@ -550,3 +550,9 @@ public final Collection<Thread> getQueuedThreads() {
 ## 独占式超时获取
 
 ![image-20200514162951980](assets/image-20200514162951980.png)
+
+## 共享式获取
+
+
+
+## 共享式超时获取

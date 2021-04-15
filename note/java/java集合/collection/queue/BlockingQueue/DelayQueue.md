@@ -26,9 +26,9 @@ public interface Delayed extends Comparable<Delayed> {
 
 最小堆的建立就是用compareTo的实现来实现比较，通过 getDelay 来实现延时获取
 
-最小堆正实现的看  [PriorityQueue](../non-thread-safety/PriorityQueue.md)
+最小堆的代码实现可以看  [PriorityQueue](../non-thread-safety/PriorityQueue.md)
 
-**无界队列所以`put`不会被阻塞，使用无界队列在使用线程池的时候，最大线程数就是一个不会生效的值**
+**无界队列`put`不会被阻塞，使用无界队列在使用线程池的时候，最大线程数就是一个不会生效的值**
 
 # source code
 
