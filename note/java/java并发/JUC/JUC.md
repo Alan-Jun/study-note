@@ -2,9 +2,9 @@
 
 JUC就是我们的 j ava.util.current 这个并发工具包它包括了
 
-* [locks 锁工具类](#Locks(锁))
+* locks 锁工具类
 * atomic 原子变量工具类
-* [线程池](#线程池)
+* 线程池
 * 并发容器 （list, map,queue,set 等容器的并发工具）
 
 架构图：
@@ -1703,9 +1703,9 @@ public class ExchangerTest {
 * AtomicIntegerFieldUpdater
 * AtomicLongFieldUpdater
 
-[1.8 新增的几个 处理类](Atomic/1.8新增.md)
+[1.8 新增的几个处理类](atomic/1.8新增.md)
 
-* LongAdder 高并发情况下比AtomicLong的表现要好，但是不能完全替代AtomicLong，具体的看[为什么要引入LongAdder](Atomic/1.8新增.md )
+* LongAdder 高并发情况下比AtomicLong的表现要好，但是不能完全替代AtomicLong，具体的看[为什么要引入LongAdder](atomic/1.8新增.md )
 * LongAccumulator
 * DoubleAdder
 * DoubleAccumulator
