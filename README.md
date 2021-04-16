@@ -57,4 +57,5 @@
 * 限流降级熔断
   * [Hystrix](https://github.com/Netflix/Hystrix)
   * [Sentinel](https://github.com/alibaba/Sentinel)
+* Service mesh
 
