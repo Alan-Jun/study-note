@@ -25,9 +25,9 @@ AbstractQueuedLongSynchronizer **队列同步器**，是**用来构建锁或者�
 
 | 方法名                                                       | 描述                                                         | 源码index                                                 |
 | ------------------------------------------------------------ | ------------------------------------------------------------ | --------------------------------------------------------- |
-| public final void **acquire**(int arg)                       | 独占式获取同步状态，如果当前线程获取同步状态成功，则由该方法返回，否则，将会进入同步队列等待，该方法将会调用重写的**tryAcquire** | [acquire](#acquire)                                       |
+| public final void **acquire**(int arg)                       | 阻塞的独占式获取同步状态，如果当前线程获取同步状态成功，则由该方法返回，否则，将会进入同步队列等待，该方法将会调用重写的**tryAcquire** | [acquire](#acquire)                                       |
 | public final void **acquireInterruptibly**(int arg)          | 与**acquire**相同，不过该方法响应中断，线程在同步队列中等待时被中断了，则该方法会抛出**InterruptedException**异常 | [acquireInterruptibly](#acquireInterruptibly)             |
-| public final boolean **tryAcquireNanos**(int arg, long nanosTimeout) | 在**acquireInterruptibly**的基础上增加了超时限制，如果在超时限制范围内未获取到同步状态那么返回false,获取到返回true | [tryAcquireNanos](#tryAcquireNanos)                       |
+| public final boolean **tryAcquireNanos**(int arg, long nanosTimeout) | 在**acquireInterruptibly**的基础上增加了超时限制，**如果在超时限制范围内未获取到同步状态那么返回**false,获取到返回true | [tryAcquireNanos](#tryAcquireNanos)                       |
 | public final boolean **release**(int arg)                    | 独占式的释放同步状态，该方法释放同步状态之后会将同步队列中第一个节点唤醒 **调用tryRelease** | [release](#release)                                       |
 |                                                              |                                                              |                                                           |
 | public final void **acquireShared**(int arg)                 | 共享式获取同步状态，如果当前线程未获取到同步状态，将会进入同步队列等待，与独占式的区别在同一时刻可以有多个线程获取到同步状态，**调用重写的tryAcquireShared方法** | [acquireShared](#acquireShared)                           |
@@ -67,7 +67,6 @@ AbstractQueuedLongSynchronizer **队列同步器**，是**用来构建锁或者�
 ```java
 /**
  * 将节点加入到队列尾部
- * 
  */
 private Node addWaiter(Node mode) {
     Node node = new Node(Thread.currentThread(), mode);
@@ -170,7 +169,7 @@ final boolean acquireQueued(final Node node, int arg) {
                     failed = false;
                     return interrupted;
                 }
-                // 通过 shouldParkAfterFailedAcquire 判断前驱节点的状态是，它获取到同步状态后会通知后继节点unpark的时候，当前节点也就可以通过parkAndCheckInterrupt方法使用LockSupport.park(this);将线程阻塞，这样可以避免无用的自旋消耗CPU资源，在parkAndCheckInterrupt中还会检查当前线程是否被中断过，只要发生就会使用 interrupted=true 记录下来，作用是在之后如果获取到锁了，会调用线程的中断方法，安全中断该线程
+                // 通过 shouldParkAfterFailedAcquire 判断前驱节点的状态是，它获取到同步状态后会通知后继节点unpark的时候，当前节点也就可以通过parkAndCheckInterrupt方法使用LockSupport.park(this);将线程阻塞，这样可以避免无用的自旋消耗CPU资源，在parkAndCheckInterrupt中还会检查当前线程是否被中断过，只要发生就会使用 interrupted=true 记录下来，作用是在之后如果获取到锁了，会调用线程的中断方法，安全中断该线程（也就是 selfInterrupt这个方法）
                 if (shouldParkAfterFailedAcquire(p, node) &&
                     parkAndCheckInterrupt())
                     interrupted = true;
@@ -253,6 +252,7 @@ private boolean doAcquireNanos(int arg, long nanosTimeout)
                 nanosTimeout = deadline - System.nanoTime();
                 if (nanosTimeout <= 0L)
                     return false;
+               // 超时时间nanosTimeout只有大于1ms的时候才会有可能调用park,低于这个的没有park的必要
                 if (shouldParkAfterFailedAcquire(p, node) &&
                     nanosTimeout > spinForTimeoutThreshold)
                     LockSupport.parkNanos(this, nanosTimeout);
@@ -293,8 +293,8 @@ private void unparkSuccessor(Node node) {
         Node s = node.next;
         if (s == null || s.waitStatus > 0) { //如果为空或已取消
             s = null;
-            for (Node t = tail; t != null && t != node; t = t.prev) // 从后向前找。
-                if (t.waitStatus <= 0)// <=0的结点，都是还有效的结点。
+            for (Node t = tail; t != null && t != node; t = t.prev) // 从后向前找。为什么从后向前查找？ 因为s==null的情况没办法从前往后查找
+                if (t.waitStatus <= 0)// <=0的结点，都是还有效的结点。无效节点会在 shouldParkAfterFailedAcquire 方法中被丢弃的
                     s = t;
         }
         if (s != null)
