@@ -2,8 +2,18 @@
 
 ## 基本类型
 
-- byte/8
-- char/16
+|       |             |            |
+| ----- | ----------- | ---------- |
+| byte  | 1Bit (字节) | 8 bit(位)  |
+| char  | 2Bit (字节) | 16 bit(位) |
+| short | 2Bit (字节) | 16 bit(位) |
+| int   | 4Bit (字节) | 32 bit(位) |
+|       |             |            |
+
+
+
+- byte:8位
+- char：16
 - short/16
 - int/32
 - float/32
@@ -1318,6 +1328,7 @@ Class 和 java.lang.reflect 一起对反射提供了支持，java.lang.reflect �
   ```
 
 - [Trail: The Reflection API](https://docs.oracle.com/javase/tutorial/reflect/index.html)
+  
   - [深入解析 Java 反射（1）- 基础](http://www.sczyh30.com/posts/Java/java-reflection-1/)
 
 # 八、异常
