@@ -2,26 +2,18 @@
 
 ## 基本类型
 
-|       |             |            |
-| ----- | ----------- | ---------- |
-| byte  | 1Bit (字节) | 8 bit(位)  |
-| char  | 2Bit (字节) | 16 bit(位) |
-| short | 2Bit (字节) | 16 bit(位) |
-| int   | 4Bit (字节) | 32 bit(位) |
-|       |             |            |
+| 类型    | 占用内存（字节） | 占用内存（位） | 默认值   |
+| ------- | ---------------- | -------------- | -------- |
+| byte    | 1Bit (字节)      | 8 bit(位)      | 0        |
+| char    | 2Bit (字节)      | 16 bit(位)     | '\u0000' |
+| short   | 2Bit (字节)      | 16 bit(位)     | 0        |
+| int     | 4Bit (字节)      | 32 bit(位)     | 0        |
+| float   | 4Bit (字节)      | 32 bit(位)     | 0.0f     |
+| long    | 8Bit (字节)      | 64 bit(位)     | 0L       |
+| double  | 8Bit (字节)      | 64 bit(位)     | 0.0d     |
+| boolean |                  |                | false    |
 
-
-
-- byte:8位
-- char：16
-- short/16
-- int/32
-- float/32
-- long/64
-- double/64
-- boolean/~
-
-boolean 只有两个值：true、false，可以使用 1 bit 来存储，但是具体大小没有明确规定。JVM 会在编译时期将 boolean 类型的数据转换为 int，使用 1 来表示 true，0 表示 false。JVM 支持 boolean 数组，但是是通过读写 byte 数组来实现的。
+**boolean 只有两个值：true、false，可以使用 1 bit 来存储，但是具体大小没有明确规定。JVM 会在编译时期将 boolean 类型的数据转换为 int，使用 1 来表示 true，0 表示 false。JVM 支持 boolean 数组，但是是通过读写 byte 数组来实现的。**
 
 - [Primitive Data Types](https://docs.oracle.com/javase/tutorial/java/nutsandbolts/datatypes.html)
 - [The Java® Virtual Machine Specification](https://docs.oracle.com/javase/specs/jvms/se8/jvms8.pdf)
