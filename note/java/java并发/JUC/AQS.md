@@ -30,13 +30,13 @@ AbstractQueuedLongSynchronizer **队列同步器**，是**用来构建锁或者�
 | public final boolean **tryAcquireNanos**(int arg, long nanosTimeout) | 在**acquireInterruptibly**的基础上增加了超时限制，如果在超时限制范围内未获取到同步状态那么返回false,获取到返回true | [tryAcquireNanos](#tryAcquireNanos)                       |
 | public final boolean **release**(int arg)                    | 独占式的释放同步状态，该方法释放同步状态之后会将同步队列中第一个节点唤醒 **调用tryRelease** | [release](#release)                                       |
 |                                                              |                                                              |                                                           |
-| public final void **acquireShared**(int arg)                 | 共享式获取同步状态，如果当前线程未获取到同步状态，将会进入同步队列等待，与独占式的区别时在同一时刻可以有多个线程获取到同步状态，**调用重写的tryAcquireShared方法** | [acquireShared](#acquireShared)                           |
+| public final void **acquireShared**(int arg)                 | 共享式获取同步状态，如果当前线程未获取到同步状态，将会进入同步队列等待，与独占式的区别在同一时刻可以有多个线程获取到同步状态，**调用重写的tryAcquireShared方法** | [acquireShared](#acquireShared)                           |
 | public final void **acquireSharedInterruptibly**(int arg)    | 和**acquireShared**相同，不过该方法响应中断                  | [acquireSharedInterruptibly](#acquireSharedInterruptibly) |
 | public final boolean **tryAcquireSharedNanos**(int arg, long nanosTimeout) | 在**acquireSharedInterruptibly**方法基础上增加超时限制       | [tryAcquireSharedNanos](#tryAcquireSharedNanos)           |
 | public final boolean **releaseShared**(int arg)              | 共享式释放同步状态                                           | [releaseShared](#releaseShared)                           |
 | public final Collection<Thread> **getQueuedThreads**()       | 获取等待在同步队列上的线程                                   | [getQueuedThreads](#getQueuedThreads)                     |
 
-## 同步器可重写的方法与描述
+## 需要做具体实现的方法
 
 | 方法名                                          | 描述                                                         |
 | ----------------------------------------------- | ------------------------------------------------------------ |
@@ -47,22 +47,22 @@ AbstractQueuedLongSynchronizer **队列同步器**，是**用来构建锁或者�
 | protected boolean **tryReleaseShared**(int arg) | 共享式释放同步状态。<br/>**如果释放后允许唤醒后续等待结点返回true，否则返回false。** |
 | protected boolean **isHeldExclusively**()       | 当前同步器是否在独占模式下被线程占用（一般该方法表示是否被当前线程所独占） |
 
-### AQS中一些重要概念和common方法
+## AQS中一些重要概念和common方法
 
-#### 队列节点类型
+### 队列节点类型
 
 - **SHARED** 共享式
 - **EXCLUSIVE** 独占式
 
-#### 队列节点的waitStatus
+### 队列节点的waitStatus
 
-- **CANCELLED**(1)：表示当前结点已取消调度。当timeout或被中断（响应中断的情况下），会触发变更为此状态，进入该状态后的结点将不会再变化。
-- **SIGNAL**(-1)：表示后继结点需要在当前节点获取到同步状态之后 unpark，后记节点能park也是要前驱节点被设置成这样的状态，park是为了节省自旋等待消耗资源
+- **CANCELLED**(1)：表示当前结点已取消调度。当timeout或被中断（响应中断的情况下），会变更为此状态，进入该状态后的结点将不会再变化。
+- **SIGNAL**(-1)：表示后继结点需要在当前节点获取到同步状态之后 执行unpark唤醒；后继节点被 park的时候也是需要前驱节点被设置成这个状态作为条件；park是为了节省自旋等待消耗资源
 - **CONDITION**(-2)：表示结点等待在Condition上，当其他线程调用了Condition的signal()方法后，CONDITION状态的结点将**从等待队列转移到同步队列中**，等待获取同步锁。
 - **PROPAGATE**(-3)：共享模式下，前继结点不仅会唤醒其后继结点，同时也可能会唤醒后继的后继结点。
 - **0**：新结点入队时的默认状态。
 
-#### addWaiter
+### addWaiter
 
 ```java
 /**
@@ -72,7 +72,7 @@ AbstractQueuedLongSynchronizer **队列同步器**，是**用来构建锁或者�
 private Node addWaiter(Node mode) {
     Node node = new Node(Thread.currentThread(), mode);
     // Try the fast path of enq; backup to full enq on failure
-    //尝试快速方式直接放到队尾。
+    //尝试使用最快速的方式放到队尾。
     Node pred = tail;
     if (pred != null) {
         node.prev = pred;
@@ -81,13 +81,31 @@ private Node addWaiter(Node mode) {
             return node;
         }
     }
-    // 上一步失败则通过enq入队。
+    // 上一步失败则通过enq入队。该方法会使用自旋的方式直到节点入队成功
     enq(node);
     return node;
 }
+/**
+ * 该方法会使用自旋的方式直到节点入队成功
+ **/
+private Node enq(final Node node) {
+        for (;;) {
+            Node t = tail;
+            if (t == null) { // Must initialize
+                if (compareAndSetHead(new Node()))
+                    tail = head;
+            } else {
+                node.prev = t;
+                if (compareAndSetTail(t, node)) {
+                    t.next = node;
+                    return t;
+                }
+            }
+        }
+    }
 ```
 
-#### shouldParkAfterFailedAcquire
+### shouldParkAfterFailedAcquire
 
 ```java
 
@@ -97,14 +115,15 @@ private Node addWaiter(Node mode) {
          /*
           * This node has already set status asking a release
           * to signal it, so it can safely park.
-          * 如果已经告诉前驱节点拿完号后通知自己，那就可以安心休息了
+          * 如果已经告诉前驱节点获取到同步状态之后他会通知自己unpark，那当前的节点就可以park休息了（目
+          * 的是为了不占用cpu资源）
           */
          return true;
      if (ws > 0) {
          /*
           * Predecessor was cancelled. Skip over predecessors and
           * indicate retry.  
-          * 如果前驱放弃了，那就一直往前找，直到找到最近一个正常等待的状态，并排在它的后边。
+          * 如果前驱放弃了(timeout or 中断了 or 获取锁的时候发生异常 )，那就一直往前找，直到找到最近一个正常等待的节点，并排在它的后边等待。
           */
          do {
              node.prev = pred = pred.prev;
@@ -115,9 +134,10 @@ private Node addWaiter(Node mode) {
           * waitStatus must be 0 or PROPAGATE.  Indicate that we
           * need a signal, but don't park yet.  Caller will need to
           * retry to make sure it cannot acquire before parking.
-          * 前驱节点是 0 or PROPAGATE 状态，当前节点可以修改它的状态为SIGNAL，这样他就会在获取同步状
-          * 态后通知自己 unpark, 该节点也会在下一次循环调用到这个方法时候 被park，从而减少无用的自旋带
-          * 来的CPU性能损耗
+          * 前驱节点是 0 or PROPAGATE 状态，当前节点可以修改它的状态为SIGNAL，这样前驱节点就会在获取
+          * 同步状态后通知自己 unpark, 当前节点也会在下一次循环中走到这个方法时候被park，从而减少无用
+          * 的自旋带来的CPU性能损耗
+          * 
           */
          compareAndSetWaitStatus(pred, ws, Node.SIGNAL);
      }
@@ -125,12 +145,12 @@ private Node addWaiter(Node mode) {
 }
 ```
 
-### acquire
+## acquire
 
 ```java
 public final void acquire(int arg) {
     // tryAcquire 独占式获取同步状态 
-    // 失败就执行  addWaiter(Node.EXCLUSIVE) 添加一个独占式节点进入等待队列尾部，然后执行acquireQueued 知道获取到同步状态，才返回，并且线程在等待过程中如果被中断过，那么会执行selfInterrupt，安全中断当前线程
+    // 失败就执行  addWaiter(Node.EXCLUSIVE) 添加一个独占式节点进入等待队列尾部，然后执行acquireQueued 直到获取到同步状态，才返回，并且线程在等待过程中如果被中断过，那么会执行 selfInterrupt方法，安全中断当前线程
     if (!tryAcquire(arg) &&
         acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
         selfInterrupt();
@@ -141,7 +161,7 @@ final boolean acquireQueued(final Node node, int arg) {
         try {
             boolean interrupted = false;
             for (;;) {
-                // 上文中我们说过 AQS使用的时内置的FIFO队列管理线程排队工作，所以这里就是利用这样的特性来执行尝试获取锁的动作,只有在前一个结点是head的时候，才意味着排队排到当前线程了
+                // 上文中我们说过 AQS使用的时内置的FIFO队列管理线程排队工作，所以这里就是利用这样的特性来执行一个尝试获取锁的动作,只有在前一个结点是head的时候，才意味着排队排到当前线程了
                 final Node p = node.predecessor();
                 if (p == head && tryAcquire(arg)) {
                     // 获取成功，当前节点自然就是head节点了
@@ -150,7 +170,7 @@ final boolean acquireQueued(final Node node, int arg) {
                     failed = false;
                     return interrupted;
                 }
-                // 通过 shouldParkAfterFailedAcquire 判断前驱节点会在它获取到同步状态后通知自己后，也就可以执行parkAndCheckInterrupt方法，该方法会使用LockSupport.park(this);将线程阻塞，也就相当于我们Thread.的join,还有object的wait方法一样，这样可以避免无用的自旋消耗CPU资源，在parkAndCheckInterrupt中还会检查当前线程是否被中断过，只要发生就会使用 interrupted=true 记录下来，作用就是在之后如果获取到锁了，会调用线程的中断方法，安全中断该线程
+                // 通过 shouldParkAfterFailedAcquire 判断前驱节点的状态是，它获取到同步状态后会通知后继节点unpark的时候，当前节点也就可以通过parkAndCheckInterrupt方法使用LockSupport.park(this);将线程阻塞，这样可以避免无用的自旋消耗CPU资源，在parkAndCheckInterrupt中还会检查当前线程是否被中断过，只要发生就会使用 interrupted=true 记录下来，作用是在之后如果获取到锁了，会调用线程的中断方法，安全中断该线程
                 if (shouldParkAfterFailedAcquire(p, node) &&
                     parkAndCheckInterrupt())
                     interrupted = true;
@@ -163,7 +183,7 @@ final boolean acquireQueued(final Node node, int arg) {
 
 ```
 
-### acquireInterruptibly
+## acquireInterruptibly
 
 ```java
 public final void acquireInterruptibly(int arg)
@@ -200,7 +220,7 @@ private void doAcquireInterruptibly(int arg)
     
 ```
 
-### tryAcquireNanos
+## tryAcquireNanos
 
 ```java
 public final boolean tryAcquireNanos(int arg, long nanosTimeout)
@@ -246,7 +266,7 @@ private boolean doAcquireNanos(int arg, long nanosTimeout)
 }
 ```
 
-### release
+## release
 
 ```java
 public final boolean release(int arg) {
@@ -282,7 +302,7 @@ private void unparkSuccessor(Node node) {
     }
 ```
 
-### acquireShared
+## acquireShared
 
 ```java
 public final void acquireShared(int arg) {
@@ -379,7 +399,7 @@ private void unparkSuccessor(Node node) {
 
 ```
 
-### acquireSharedInterruptibly
+## acquireSharedInterruptibly
 
 ```java
 /**
@@ -419,7 +439,7 @@ private void doAcquireSharedInterruptibly(int arg)
     }
 ```
 
-### tryAcquireSharedNanos
+## tryAcquireSharedNanos
 
 ```java
 /**
@@ -469,7 +489,7 @@ private boolean doAcquireSharedNanos(int arg, long nanosTimeout)
 
 ```
 
-### releaseShared
+## releaseShared
 
 ```java
 public final boolean releaseShared(int arg) {
@@ -523,7 +543,7 @@ private void unparkSuccessor(Node node) {
     }
 ```
 
-### getQueuedThreads
+## getQueuedThreads
 
 ```java
 /**
