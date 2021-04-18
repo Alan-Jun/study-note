@@ -298,7 +298,7 @@ private void unparkSuccessor(Node node) {
                     s = t;
         }
         if (s != null)
-            LockSupport.unpark(s.thread);
+            LockSupport.unpark(s.thread);// huan
     }
 ```
 
@@ -346,11 +346,11 @@ private void doAcquireShared(int arg) {
 private void setHeadAndPropagate(Node node, long propagate) {
         Node h = head; // Record old head for check below
         setHead(node); //head指向自己
-    	//如果还有剩余量，继续唤醒下一个邻居线程
+    	//如果还有剩余量，继续唤醒下一个后继节点
         if (propagate > 0 || h == null || h.waitStatus < 0 ||
             (h = head) == null || h.waitStatus < 0) {
             Node s = node.next;
-            // 并且该节点的下一个节点也是共享型节点
+            // 并且该节点的后继节点也是共享型节点
             if (s == null || s.isShared())
                 // 唤醒它的后继节点线程
                 doReleaseShared();
@@ -389,12 +389,12 @@ private void unparkSuccessor(Node node) {
         Node s = node.next;
         if (s == null || s.waitStatus > 0) { //如果为空或已取消
             s = null;
-            for (Node t = tail; t != null && t != node; t = t.prev) // 从后向前找。
-                if (t.waitStatus <= 0)// <=0的结点，都是还有效的结点。
+            for (Node t = tail; t != null && t != node; t = t.prev) // 从后向前找。为什么从后向前查找？ 因为s==null的情况没办法从前往后查找
+                if (t.waitStatus <= 0)// <=0的结点，都是还有效的结点。无效节点会在 shouldParkAfterFailedAcquire 方法中被丢弃的
                     s = t;
         }
         if (s != null)
-            LockSupport.unpark(s.thread);
+            LockSupport.unpark(s.thread);// huan
     }
 
 ```
