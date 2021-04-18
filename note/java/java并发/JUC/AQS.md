@@ -476,7 +476,7 @@ private boolean doAcquireSharedNanos(int arg, long nanosTimeout)
                 if (nanosTimeout <= 0L)
                     return false;
                 if (shouldParkAfterFailedAcquire(p, node) &&
-                    nanosTimeout > spinForTimeoutThreshold)//spinForTimeoutThreshold = 1000L; 也就是说如果超时等待时间小于1s的话就不需要 park 线程了
+                    nanosTimeout > spinForTimeoutThreshold)//spinForTimeoutThreshold = 1000L; 也就是说如果超时等待时间小于1ms的话就不需要 park 线程了
                     LockSupport.parkNanos(this, nanosTimeout);
                 if (Thread.interrupted())
                     throw new InterruptedException();
