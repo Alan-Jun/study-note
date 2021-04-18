@@ -371,7 +371,7 @@ private void doReleaseShared() {
                  !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
                 continue;                // loop on failed CAS
         }
-        if (h == head)// head发生变化
+        if (h == head)// head没有变化的时候循环中止，这里有点辅助唤醒的意味，提升可以更快唤醒共享线程
             break;
     }
 }
@@ -516,7 +516,7 @@ private void doReleaseShared() {
                  !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
                 continue;                // loop on failed CAS
         }
-        if (h == head)// head发生变化
+        if (h == head)// head没有变化的时候循环中止，这里有点辅助唤醒的意味，提升可以更快唤醒共享线程
             break;
     }
 }
@@ -534,12 +534,12 @@ private void unparkSuccessor(Node node) {
         Node s = node.next;
         if (s == null || s.waitStatus > 0) { //如果为空或已取消
             s = null;
-            for (Node t = tail; t != null && t != node; t = t.prev) // 从后向前找。
-                if (t.waitStatus <= 0)// <=0的结点，都是还有效的结点。
+            for (Node t = tail; t != null && t != node; t = t.prev) // 从后向前找。为什么从后向前查找？ 因为s==null的情况没办法从前往后查找
+                if (t.waitStatus <= 0)// <=0的结点，都是还有效的结点。无效节点会在 shouldParkAfterFailedAcquire 方法中被丢弃的
                     s = t;
         }
         if (s != null)
-            LockSupport.unpark(s.thread);
+            LockSupport.unpark(s.thread);// huan
     }
 ```
 
