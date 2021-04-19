@@ -291,7 +291,7 @@ private void unparkSuccessor(Node node) {
             compareAndSetWaitStatus(node, ws, 0);
 	    //找到下一个需要唤醒的结点s
         Node s = node.next;
-        if (s == null || s.waitStatus > 0) { //如果为空或已取消
+        if (s == null || s.waitStatus > 0) { //有的同学会问为啥存在s==null，独占式的不存在这样的问题，但是共享锁是多个线程在执行，这个节点的线程在释放锁走到这一步了，某一个线程在这个时候获取到锁了，讲head指向了自己，那么就会存在 s == null 的情况了
             s = null;
             for (Node t = tail; t != null && t != node; t = t.prev) // 从后向前找。为什么从后向前查找？ 因为s==null的情况没办法从前往后查找
                 if (t.waitStatus <= 0)// <=0的结点，都是还有效的结点。无效节点会在 shouldParkAfterFailedAcquire 方法中被丢弃的
@@ -387,7 +387,7 @@ private void unparkSuccessor(Node node) {
             compareAndSetWaitStatus(node, ws, 0);
 	    //找到下一个需要唤醒的结点s
         Node s = node.next;
-        if (s == null || s.waitStatus > 0) { //如果为空或已取消
+        if (s == null || s.waitStatus > 0) { //有的同学会问为啥存在s==null，独占式的不存在这样的问题，但是共享锁是多个线程在执行，这个节点的线程在释放锁走到这一步了，某一个线程在这个时候获取到锁了，讲head指向了自己，那么就会存在 s == null 的情况了
             s = null;
             for (Node t = tail; t != null && t != node; t = t.prev) // 从后向前找。为什么从后向前查找？ 因为s==null的情况没办法从前往后查找
                 if (t.waitStatus <= 0)// <=0的结点，都是还有效的结点。无效节点会在 shouldParkAfterFailedAcquire 方法中被丢弃的
@@ -532,7 +532,7 @@ private void unparkSuccessor(Node node) {
             compareAndSetWaitStatus(node, ws, 0);
 	    //找到下一个需要唤醒的结点s
         Node s = node.next;
-        if (s == null || s.waitStatus > 0) { //如果为空或已取消
+        if (s == null || s.waitStatus > 0) { //有的同学会问为啥存在s==null，独占式的不存在这样的问题，但是共享锁是多个线程在执行，这个节点的线程在释放锁走到这一步了，某一个线程在这个时候获取到锁了，讲head指向了自己，那么就会存在 s == null 的情况了
             s = null;
             for (Node t = tail; t != null && t != node; t = t.prev) // 从后向前找。为什么从后向前查找？ 因为s==null的情况没办法从前往后查找
                 if (t.waitStatus <= 0)// <=0的结点，都是还有效的结点。无效节点会在 shouldParkAfterFailedAcquire 方法中被丢弃的
