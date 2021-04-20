@@ -19,6 +19,8 @@ JUC就是我们的 j ava.util.current 这个并发工具包它包括了
 
 # Locks
 
+**关于 Locks 篇 会先介绍接口定义，然后在进行源码的解读**
+
 ## Lock接口
 
 首先我们看一下java中Lock接口的定义:

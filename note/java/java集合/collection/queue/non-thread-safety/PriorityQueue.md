@@ -8,5 +8,5 @@
 
 如果我们想获得最大堆，那么在 按照正常 o1>o2  返回 >0, o1=o2  返回 0, o1<o2  返回 <0,用来使用最小堆没问题，但是要用 `PriorityQueue` 实现最大堆的话，我们就要颠倒这个关系 o1>o2  返回 <0, o1=o2  返回 0, o1<o2  返回 >0.这样就能得到一个最大堆
 
-关于最大堆，最小堆的 以及`PriorityQueue ` 源码 可以看 [heap](../../../../../Data-Structure\heap.md)
+关于最大堆，最小堆的 以及`PriorityQueue ` 源码 可以看 [heap](../../../../../Data-Structure/heap.md)
 
