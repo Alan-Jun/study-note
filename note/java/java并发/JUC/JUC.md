@@ -42,7 +42,7 @@ JUC就是我们的 j ava.util.current 这个并发工具包它包括了
 
 | 接口                                                         | 描述                                                         |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| void await() throws InterruptedException                     | 使当前线程进入wait状态，直到被通知signal()/signalAll()/中断，其中被signal，唤醒之后，要直到获取到该Condition关联的锁，才能从该方法返回 |
+| void await() throws InterruptedException                     | 使当前线程进入wait状态，直到被通知signal()/signalAll()/中断，其中被signal唤醒之后，要直到获取到该Condition关联的锁，才能从该方法返回 |
 | void awaitUninterruptibly()                                  | 和await方法类似，不过不响应中断                              |
 | long awaitNanos(long nanosTimeout) throws InterruptedException | 和await方法类似增加了超时机制                                |
 | boolean await(long time, TimeUnit unit) throws InterruptedException | 和await方法类似增加了超时机制                                |
@@ -77,7 +77,7 @@ JUC就是我们的 j ava.util.current 这个并发工具包它包括了
                 throw new InterruptedException();
 		     // 添加到等待队列尾部
             Node node = addConditionWaiter();
-     		// 释放锁
+     		 // 释放锁
             int savedState = fullyRelease(node);
             int interruptMode = 0;
             while (!isOnSyncQueue(node)) {
@@ -132,7 +132,7 @@ public final long awaitNanos(long nanosTimeout)
 
 ```java
 public final void signal() {
-    // 检查当前显示是获取锁的线程
+    // 检查当前线程是获取锁的线程
     if (!isHeldExclusively())
         throw new IllegalMonitorStateException();
     Node first = firstWaiter;
@@ -163,7 +163,7 @@ final boolean transferForSignal(Node node) {
      * attempt to set waitStatus fails, wake up to resync (in which
      * case the waitStatus can be transiently and harmlessly wrong).
      */
-    // 将节点加入到 同步队列的尾部，返回值p 是前置节点
+    // 将节点加入到同步队列的尾部，返回值p是node的前置节点
     Node p = enq(node);
     int ws = p.waitStatus;
     // 如果它的前置节点不是 SIGNAL 状态的，那么需要使用CAS尝试修改成这样的，因为当前节点需要前置节点通知唤醒，如果失败，那就直接唤醒当前线程节点
