@@ -1022,7 +1022,7 @@ CountDownLatch允许一个或多个线程等待其他线程完成操作。
 
 ```java
 public class CountDownLatchTest { 
-    staticCountDownLatch c = new CountDownLatch(2); 
+    static CountDownLatch c = new CountDownLatch(2); 
     public static void main(String[] args) throws InterruptedException { 
         new Thread(new Runnable() {            
             @Override public void run() { 
@@ -1816,3 +1816,4 @@ public class AtomicLong extends Number implements java.io.Serializable {
 
 除此之外还有很多其他集合的文章，有兴趣的可以去看看，里面有map,list,set，queue等的文章：[java集合](../../java集合)
 
+​	

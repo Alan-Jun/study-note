@@ -419,7 +419,7 @@ Java 9 引入了模块系统，并且略微更改了上述的类加载器1。扩
 
 - 双亲委派的作用是什么呢？
 
-**保证类任意类加载环境的唯一性**，比如java.lang.String 类 你可以再定义一个lava.lang.String 这样的类，但是加载的时候不会被加载，并且会抛出异常。
+**保证类在任意的类加载环境下的唯一性**，比如java.lang.String 类 你可以再定义一个lava.lang.String 这样的类，但是加载的时候不会被加载，并且会抛出异常。
 
 需要注意的是除了 Bootstrap ClassLoader 之外别的类加载器都应该有自己的父类加载器，这些类加载器的**父子关系不是以继承关系实现的，都是使用组合关系实现。**
 
@@ -662,33 +662,4 @@ public class ClassLoaderDemo {
 **因为这样的机制，可以保证同一个全限定名下的类只会被同一加载器加载一次，保证了该类在JVM中的唯一性，避免出现像判断两个类是否是同一类时失败，等等意想不到的情况，同时也是为了安全考虑，这样做可以保护像是，`java.lang.Object`这样一些基础类不被恶意篡改**
 
 列 ： `java.lang.Object` 就仅会被 Bootstap ClassLoader 加载一次，也就仅有这一个
-
-## SPI （service provider interface）
-
-因为在某些情况下父类加载器需要委托子类加载器去加载class文件。受到加载范围的限制，父类加载器无法加载到需要的文件，以Driver接口为例，由于Driver接口定义在jdk当中的，而其实现由各个数据库的服务商来提供，比如mysql的就写了`MySQL Connector`，那么问题就来了，DriverManager（也由jdk提供）要加载各种实现了Driver接口的实现类，然后进行管理，但是DriverManager由启动类加载器加载，只能加载JAVA_HOME的lib下文件，而其实现是由服务商提供的，由系统类加载器加载，这个时候就需要启动类加载器来委托子类来加载Driver实现，从而破坏了双亲委派，这里仅仅是举了破坏双亲委派的其中一个情况。
-
-为了证明我所说的，我准备了pgsql 驱动包的截图 :                              
-
-![img](assets/1539606674692.png)
-
-以及java.sql.Driver接口的路径截图
-
-![1539606698463](assets/1539606698463.png)
-
-很明显了吧，Driver类是在rt.jar 中定义的service 接口，不同的数据库厂商，会有他们对应的实现，而这些实现的感知就是通过jdk 定义的SPI 机制，这是一种定义规范。
-
-针对这样的问题，那么我们肯定要去解决它，所以SPI 出现了。jdk 中提供了一个 ServiceLoader<T> 的一个类加载器（这个类加载器的源码很简单这里就不细说了，有兴趣的可以自己去看看） 来实现这种服务发现 ，你只需要根据他的规定在 根目录（Classpath）创建一个META-INF/service目录。然后在下面创建一个以接口全路径命名的文件，在里面写上你的实现类的全限定名就可以了
-如果是多个实现，那就分行写（一行写一个实现的全路径名）
-
-​         还有一个SPI的典型事例 要说一下 Alibaba 的dubbo 框架，dubbo 框架里面的扩展实现都是基于SPI（dubbo 自定义的一种SPI 规范）来实现的
-
-​         Dubbo 的SPI 规范 定义了classpath下的三个路径
-
-META-INF/service/；META-INF/dubbo/; META-INF/dubbo/internal/
-
-​         这些扩展类的加载交给了 dubbo 中定义的 ExtensionLoader类来负责加载
-
-![1539606713615](assets/1539606713615.png)        
-
-友情提示：Alibaba 的dubbo  现在交给apache 维护了
 
