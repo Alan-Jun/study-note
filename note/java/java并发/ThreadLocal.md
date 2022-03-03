@@ -67,7 +67,7 @@ static class Entry extends WeakReference<ThreadLocal> {
 }
 ```
 
-Entry继承自WeakReference，包括两个元素，一个ThreadLocal 类型的成员和一个Object类型的成员value。其中ThreadLocal 类型的成员是一个弱引用，其特点是，当引用元素无强引用时，JVM GC时会立即回收引用元素。关于引用着一块大家可以去了解一下关于Java强引用、软引用、弱引用、幽灵引用相关的知识
+Entry继承自WeakReference，包括两个元素，一个ThreadLocal 类型的成员和一个Object类型的成员value。其中ThreadLocal 类型的成员是一个弱引用，其特点是，当引用元素无强引用时，JVM GC时会立即回收引用元素。关于引用这一块大家可以去了解一下关于Java强引用、软引用、弱引用、幽灵引用相关的知识
 
 ThreadLocalMap的成员变量：
 
@@ -128,7 +128,7 @@ private static int prevIndex(int i, int len) {
 
 为了降低冲突机率提高效率，ThreadLocal 实例的HashCode 采用了 用斐波那契散列乘数使hash分布更均匀
 
-看 ThreadLocal源码就会发现 每次`new ThreadLocal`时因为threadLocalHashCode的初始化，会使threadLocalHashCode值自增一次，增量设计师这个斐波那契散列乘数 0x61c88647。
+看 ThreadLocal源码就会发现 每次`new ThreadLocal`时因为threadLocalHashCode的初始化，会使threadLocalHashCode值自增一次，增量是这个斐波那契散列乘数 0x61c88647。
 
 ![image-20210414202607383](assets/image-20210414202607383.png)
 
@@ -190,7 +190,7 @@ private ThreadLocalMap(ThreadLocalMap parentMap) {
 
 ### Expunge（内存擦除）
 
-Entry对象Key为弱引用，当Key所指对象无强引用时，JVM GC时会自动回收该对象，从而造成Entry状态变为STALE（ Entry.get()==null  就说明Entry的状态是STALE），即无效状态。此时，必须对该Entry对象及其Value引用进行擦除，防止内存泄漏。
+Entry对象Key为弱引用，当Key所指对象无强引用时，JVM GC时会自动回收该对象，从而造成Entry状态变为STALE（ Entry.get()==null  就说明Entry的状态是STALE），即无效状态。此时，必须对该Entry对象及其Value引用进行擦除，防止了 thread local的内存泄漏。但是ThreadLocalMap 中的 value值不会被释放，所以在使用的时候还是需要特别注意我们流程处理结束之后要显示的调用 remove方法清理引用，保证我们不出现内存泄漏问题。
 
 #### expungeStaleEntry
 
@@ -434,12 +434,8 @@ private Entry getEntryAfterMiss(ThreadLocal<?> key, int i, Entry e) {
 
 有了上面我们的 ThreadLocal 的介绍，我们知道 ThreadLocal 在使用的时候会给每一个是用到它的线程创建一个 ThreadLocalMap 用来存放线程各自的副本，我们知道通常我们的线程的使用都是利用到线程池的，还有就是在一个服务系统中很可能线程池中的这些线程都是不会销毁的，也就是说如果有100个这样的线程没有销毁，在只有一个TheadLocal变量的时候，这100个线程中就存在 100个 ThreadLocalMap，以及 100个ThreadLocalMap 中会分别存放一个 entry；在这样的情况下，我们就会面临两种内存泄漏情况：
 
-* 一种是 TheadLocal 是被强引用的情况：由于 TheadLocal 变量被强引用着，无法对其内存进行擦出，会导致上面免俗的 100个entry的内存泄露
-* 一种是其被弱引用的情况：这个是 Josh Bloch 和 Doug Lea 对TheadLocal 的优化，为了避免非 static TheadLocal变量内存泄漏设计的，内存擦出方案，利用弱饮用的特性在，线程执行完成之后，非 static TheadLocal变量的引用被移除线程虚拟机栈之后发生gc回收之后，标记这一块Entry实例是可以擦出的，在TheadLocalMap的get，set方法中会执行这样的擦出工作防止内存泄漏，如果不使用弱饮用来这几Entry的key, 那么我们上面描述的这100份内存会一直存在那，也就是这些内存泄漏了
+* 一种是 TheadLocal 是被强引用的情况：由于 TheadLocal 变量被强引用着，无法对其内存进行擦出，会导致上面描述的内存泄露（一个 threadLocal实例，100个value实例，100个entry实例）
+* 一种是仅弱引用的情况：这个是 Josh Bloch 和 Doug Lea 对TheadLocal 的优化，为了避免非 static TheadLocal变量内存泄漏设计的，内存擦除方案，利用弱饮用的特性，线程执行完成之后，非 static TheadLocal变量的引用在发生gc回收之后被移除线程虚拟机栈之后，标记这一块Entry实例是可以擦出的，在TheadLocalMap的get，set方法中会执行这样的擦出工作防止内存泄漏，如果不使用弱饮用来饮用这几Entry的key, 那么我们上面描述的这100份内存会一直存在那，也就是这些内存泄漏了
 
-上面我们描述的只是 单个 TheadLocal 且 只有100线程的场景，如果是 10个200线程呢，那就是2000个entry的泄漏，所以为了避免这样的问题，最根本的是在使用完成之后调用 ThreadLocal#remove方法
-
-
-
-### 
+上面我们描述的只是 单个 TheadLocal 且 只有100线程的场景，如果是 10个200线程呢，那就是2000个entry的泄漏，所以为了避免这样的问题，最根本的是在使用完成之后调用 ThreadLocal#remove方法会是一个更好的使用习惯，因为就算是内存擦除也是延迟擦出的不可避免的还是在一个时间段占用了内存空间
 
