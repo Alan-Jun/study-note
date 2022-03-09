@@ -10,17 +10,21 @@ sentinel的核心功能流量控制，熔断降级等等，都依赖它的数据
 
 流量控制又叫做过载保护，sentinel提供下面几种能力，功能详情可以在上文链接的官网中查看这里就不重复了，主要想聊聊他提供的功能使用到的算法：
 
-* 匀速器：漏桶算法
-* 冷启动：
+* 匀速器：保证平均qps的令牌桶算法，支持流量的一定的突发，支持一定程度等待
+* 冷启动：是一种支持预热的令牌痛算法
 * 直接拒绝：不需要使用算法，根据获取的统计数据直接和陪孩子的规则做对比即刻
 
 ## 熔断降级
 
-
+这个比较简单，基于 上层通过滑动窗口统计到的数据和熔断降级规则做比较，符合条件的走熔断降级逻辑即可，未匹配上任何条件放行
 
 ## 系统负载保护
 
+## sentinel 的一些问题
 
+* https://www.cnblogs.com/mrxiaobai-wen/p/14192841.html
+
+  
 
 # 算法解释
 
@@ -30,15 +34,119 @@ sentinel的核心功能流量控制，熔断降级等等，都依赖它的数据
 
 滑动时间窗口算法在计数器算法的基础上做了优化，他将计数的区间分成了多个小窗口，每次大窗口向后滑动一个小窗口，并且保证大窗口内的流量不超出阈值，这样的实现相对计数器算法来说平滑了很多，窗口拆分得细一些也能一定程度的保证达成我们需要的效果，但是并没有完全解决时间零界点的问题，比如1分钟拆分成了10个100ms的小窗口，在窗口未滑动的时候，1s 20ms 的时候了2000的流量，而我们的限制是，1分钟1000。所以问题还是存在的，不过由于窗口拆分是可以拆分得更细一些的，所以相比计数器算法要平滑很多，大多数业务场景下能达成效果。
 
-上代码：
+一个讲解该算法的博客文章：https://www.cnblogs.com/huansky/p/13488234.html
+
+代码可以参考 sentinel 的窗口实现方案，该方案还兼顾了并发场景的数据统计核心代码是LeapArray，他是一个环形的滑动窗口，内存使用率较高，它有几个参数：
+
+* windowLengthInMs 拆分的小窗口长度
+* sampleCount 小窗口的数量
+* intervalInMs 滑动窗口的总长（单位ms）
+* intervalInSecond 滑动窗口的总长（单位s）
+
+几个核心方法实现了窗口的滑动，同时由于巧妙的环形设计，统计窗口中的计数只需要将所有小窗口的值加起来即可获取到窗口时间内的总值，这时候就可以直接判断是否应该拦截请求了，如果可以通过，就可以使用下面的方法来给当前时间对应的窗口叠加一次新的计数
+
+* currentWindow 方法：用于在放行条件下选取最新的小窗口增加计数，同时窗口的滑动逻辑也在其中
+* calculateTimeIdx 方法：用于currentWindow内部逻辑中计算得到当前时间的窗口位置索引位置
+* calculateWindowStart 方案： 用户 currentWindow 内部逻辑中计算得到当前时间对应的窗口的startTime
 
 ```java
+public WindowWrap<T> currentWindow(long timeMillis) {
+    if (timeMillis < 0) {
+        return null;
+    }
+		// 计算当前数据对应的窗口索引
+    int idx = calculateTimeIdx(timeMillis);
+    // 计算当前时间对应的窗口的startTime
+    long windowStart = calculateWindowStart(timeMillis);
+    while (true) {
+        // 获取到该idx 索引位置的小窗口
+        WindowWrap<T> old = array.get(idx);
+        // 如果该窗口未初始化，初始化该小窗口
+        if (old == null) {
+            /*
+             *     B0       B1      B2    NULL      B4
+             * ||_______|_______|_______|_______|_______||___
+             * 200     400     600     800     1000    1200  timestamp
+             *                             ^
+             *                          time=888
+             *            bucket is empty, so create new and update
+             *
+             * If the old bucket is absent, then we create a new bucket at {@code windowStart},
+             * then try to update circular array via a CAS operation. Only one thread can
+             * succeed to update, while other threads yield its time slice.
+             */
+            WindowWrap<T> window = new WindowWrap<T>(windowLengthInMs, windowStart, newEmptyBucket(timeMillis));
+            // cas 的方式将其添加到循环数组中
+            if (array.compareAndSet(idx, null, window)) {
+                // Successfully updated, return the created bucket.
+                return window;
+            } else {
+                // Contention failed, the thread will yield its time slice to wait for bucket available.
+                // 如果因为此时发生了并发竞争，放弃cpu资源等待while 循环逻辑下一次重新执行
+                Thread.yield();
+            }
+        } else if (windowStart == old.windowStart()) {
+
+            /*
+             *     B0       B1      B2     B3      B4
+             * ||_______|_______|_______|_______|_______||___
+             * 200     400     600     800     1000    1200  timestamp
+             *                             ^
+             *                          time=888
+             *            startTime of Bucket 3: 800, so it's up-to-date
+             *
+             * If current {@code windowStart} is equal to the start timestamp of old bucket,
+             * that means the time is within the bucket, so directly return the bucket.
+             */
+             // 如果索引位置的小窗口已初始化，并且starttime 和 当前时间计算得到的相等，那么说明当前时间输入该小窗口的范围内所以可以直接使用该小窗口
+            return old;
+        } else if (windowStart > old.windowStart()) {
+            /*
+             *   (old)
+             *             B0       B1      B2    NULL      B4
+             * |_______||_______|_______|_______|_______|_______||___
+             * ...    1200     1400    1600    1800    2000    2200  timestamp
+             *                              ^
+             *                           time=1676
+             *          startTime of Bucket 2: 400, deprecated, should be reset
+             *
+             * If the start timestamp of old bucket is behind provided time, that means
+             * the bucket is deprecated. We have to reset the bucket to current {@code windowStart}.
+             * Note that the reset and clean-up operations are hard to be atomic,
+             * so we need a update lock to guarantee the correctness of bucket update.
+             *
+             * The update lock is conditional (tiny scope) and will take effect only when
+             * bucket is deprecated, so in most cases it won't lead to performance loss.
+             */
+             // 如果索引位置的小窗口已初始化，但是 old.starttime 小雨当前时间计算得到的startTime，说明当前时间对应的窗口应该更新了（也就是窗口应该滑动了）
+            if (updateLock.tryLock()) {
+                try {
+                    // Successfully get the update lock, now we reset the bucket.
+                    return resetWindowTo(old, windowStart);
+                } finally {
+                    updateLock.unlock();
+                }
+            } else {
+                // Contention failed, the thread will yield its time slice to wait for bucket available.
+                Thread.yield();
+            }
+        } else if (windowStart < old.windowStart()) {
+            // Should not go through here, as the provided time is already behind.
+            // 这种场景比本不可能出现，应该时间不可能向前走，除非获取当前时间的工具出错了（操作系统提供的）
+            return new WindowWrap<T>(windowLengthInMs, windowStart, newEmptyBucket(timeMillis));
+        }
+    }
+}
+
+
 
 ```
 
+
+
 该算法还有一种实现方式，本质思想是转换概念，将原本问题的通过确定时间范围去进行次数限制。转换成线确定次数大小，然后再来进行时间限制。这种方式由于需要记录每一次请求的time 实现起来会更费内存一些，而上面一种实现方式消耗更多的是拆分的窗口数量的内存
 
-https://cloud.tencent.com/developer/article/1761700
+[滑动窗口算法（另一种实现方式）](滑动窗口算法.md)
 
 ## 计数器算法
 
@@ -68,3 +176,174 @@ public boolean canExecute(){
 ```
 
 **它的缺点：**简单易于实现确实很不错，不过也存在着一个明显的缺点：“时间零界点”问题，比如在 0-58秒的时候都没有收到请求，然后到了59秒的时候来了500个请求，然后下一个一分钟的开始的一秒又来了500个请求，这种场景就明显不符合我们一分钟内限流1000的要求了，因为这种情况很可能导致我们的系统崩溃（我们限流的设置是为了保护系统的处理能力是在它的承载范围之内）
+
+## 漏桶算法
+
+算法思想：当有请求到来时先放到木桶中，worker以固定的速度从木桶中取出请求进行相应。如果木桶已经满了，直接返回请求频率超限的错误码或者页面。
+
+漏桶算法能够强行限制数据的传输速率（流量整形）。
+
+<img src="assets/image-20220308192033981.png" alt="image-20220308192033981" style="zoom:50%;" />
+
+适用场景：
+
+流量最均匀的限流方式，一般用于流量“整形”，例如保护数据库的限流。先把对数据库的访问加入到木桶中，worker再以db能够承受的qps从木桶中取出请求，去访问数据库。不太适合电商抢购和微博出现热点事件等场景的限流（这种场景会有突发流量）。
+
+go的代码：https://github.com/kevinyan815/gocookbook/issues/28
+
+java:
+
+```java
+@Slf4j
+public class LeakyBucketLimiter {
+    private ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(5);
+ 
+    // 桶的容量
+    public int capacity = 10;
+    // 当前水量
+    public Atomic water = 0;
+    //水流速度/s
+    public int rate = 4;
+    // 最后一次加水时间
+    public long lastTime = System.currentTimeMillis();
+ 
+    public void acquire() {
+        scheduledExecutorService.scheduleWithFixedDelay(() -> {
+            long now = System.currentTimeMillis();
+            //计算当前水量
+            water = Math.max(0, (int) (water - (now - lastTime) * rate /1000));
+            int permits = (int) (Math.random() * 8) + 1;
+            log.info("请求数：" + permits + "，当前桶余量：" + (capacity - water));
+            lastTime = now;
+            if (capacity - water < permits) {
+                // 若桶满,则拒绝
+                log.info("限流了");
+            } else {
+                // 还有容量
+                water += permits;
+                log.info("剩余容量=" + (capacity - water));
+            }
+        }, 0, 500, TimeUnit.MILLISECONDS);
+    }
+ 
+    public static void main(String[] args) {
+        LeakyBucketLimiter limiter = new LeakyBucketLimiter();
+        limiter.acquire();
+    }
+}
+```
+
+注意如果考虑线程安全问题加锁处理/或则使用atomic然后通过自旋来处理并发问题
+
+## 令牌桶算法
+
+和漏桶算法不同，令牌桶是为了在限制数据的平均传输速率的同时还允许某种程度的突发传输而设计的
+
+go的普通的令牌痛的实现：https://github.com/kevinyan815/gocookbook/issues/27
+
+
+
+java部分可以参考sentinel的令牌算发的代码，和普通实现稍有不同，sentinel支持的实现支持一定的等待时常
+
+```java
+/*
+ * Copyright 1999-2018 Alibaba Group Holding Ltd.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.alibaba.csp.sentinel.slots.block.flow.controller;
+
+import java.util.concurrent.atomic.AtomicLong;
+
+import com.alibaba.csp.sentinel.slots.block.flow.TrafficShapingController;
+
+import com.alibaba.csp.sentinel.util.TimeUtil;
+import com.alibaba.csp.sentinel.node.Node;
+
+/**
+ * @author jialiang.linjl
+ */
+public class RateLimiterController implements TrafficShapingController {
+
+    private final int maxQueueingTimeMs;
+    private final double count;
+
+    private final AtomicLong latestPassedTime = new AtomicLong(-1);
+
+    public RateLimiterController(int timeOut, double count) {
+        this.maxQueueingTimeMs = timeOut;
+        this.count = count;
+    }
+
+    @Override
+    public boolean canPass(Node node, int acquireCount) {
+        return canPass(node, acquireCount, false);
+    }
+
+    @Override
+    public boolean canPass(Node node, int acquireCount, boolean prioritized) {
+        // Pass when acquire count is less or equal than 0.
+        if (acquireCount <= 0) {
+            return true;
+        }
+        // Reject when count is less or equal than 0.
+        // Otherwise,the costTime will be max of long and waitTime will overflow in some cases.
+        if (count <= 0) {
+            return false;
+        }
+
+        long currentTime = TimeUtil.currentTimeMillis();
+        // Calculate the interval between every two requests.
+      	// count 是qps , 1s / count 可以得到没一个请求的令牌的生成速率，* 1000 是把单位换算成ms 
+      	// acquireCount * (1.0 * / count * 1000) 处理 acquireCount 请求需要消耗多少ms
+        long costTime = Math.round(1.0 * (acquireCount) / count * 1000);
+
+        // Expected pass time of this request.
+      	// 得到上一次发放令牌的时间+当前的时间
+        long expectedTime = costTime + latestPassedTime.get();
+				// currentTime 如果大于 expectedTime 说明可以放行，窗口内的平均速率是满足 count定义的qps限制的
+        if (expectedTime <= currentTime) {
+            // Contention may exist here, but it's okay.
+            latestPassedTime.set(currentTime);
+            return true;
+        } else {
+            // Calculate the time to wait.
+          // 反之计算需要等待多少时间才能获取到足够的令牌
+            long waitTime = costTime + latestPassedTime.get() - TimeUtil.currentTimeMillis();
+          // 对比是否超过了定义的最大等待时间
+            if (waitTime > maxQueueingTimeMs) {
+                return false;
+            } else {
+                long oldTime = latestPassedTime.addAndGet(costTime);
+                try {
+                    waitTime = oldTime - TimeUtil.currentTimeMillis();
+                    if (waitTime > maxQueueingTimeMs) {
+                        latestPassedTime.addAndGet(-costTime);
+                        return false;
+                    }
+                    // in race condition waitTime may <= 0
+                    if (waitTime > 0) {
+                        Thread.sleep(waitTime);
+                    }
+                    return true;
+                } catch (InterruptedException e) {
+                }
+            }
+        }
+        return false;
+    }
+
+}
+
+```
+
