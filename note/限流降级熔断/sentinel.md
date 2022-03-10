@@ -1,4 +1,4 @@
-# 官方杰嫂文档
+# 官方介绍文档
 
 https://sentinelguard.io/zh-cn/docs/introduction.html
 
