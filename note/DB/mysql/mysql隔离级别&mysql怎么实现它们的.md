@@ -159,7 +159,7 @@ read commit 级别 ，通过每次查询获取最新的read view 和最新的数
      select sleep(10);
      commit;
      
-     -- 读事务 session B（第一次读取建立这个数据中这个读的唯一read view,以及去了该表的快照数据，查询数据取得数据的read_view_sees_trx_id函数判断这条数据不可见，读取undo log,第二次读使用的是第一次建立的read view所以判断结果相同）
+     -- 读事务 session B（第一次读取建立这个数据中这个读的唯一read view,以及取了该表的快照数据，查询数据取得数据的read_view_sees_trx_id函数判断这条数据不可见，读取undo log,第二次读使用的是第一次建立的read view所以判断结果相同）
      begin; 
      SELECT * FROM policyinfo where itemId = 199655;
      select sleep(10);

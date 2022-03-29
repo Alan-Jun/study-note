@@ -54,6 +54,12 @@
 
 **最后需要注意的事，消息多次消费失败这种情况可能是我们的系统问题了（非网络原因的情况），像这种强可靠性的就需要入库，人为干预处理了，不然一致ack失败重试，会造成queue处理阻塞问题**
 
+
+
+# 消息顺序问题
+
+
+
 # 消息幂等相关问题
 
 https://mp.weixin.qq.com/s?__biz=MjM5ODYxMDA5OQ==&mid=2651960002&idx=1&sn=c0775231bccf002c3178eabe43f1cdcb&chksm=bd2d071e8a5a8e08c3a5287247ea41dee6b2621e6ffafbf909ec1e8a866b7c816eeeea227246&scene=21#wechat_redirect
