@@ -68,6 +68,8 @@ https://www.jianshu.com/p/61752c985031
 
 ## 2.10 JUC
 
+
+
 # 3. JDK6 新特性
 
 ## 3.1 Desktop类和SystemTray类
@@ -398,7 +400,7 @@ Java 8 允许你使用 :: 关键字来传递方法或者构造函数引用，上
 ```java
 converter = something::startsWith;
 String converted = converter.convert("Java");
-System.out.println(converted);    // "J"123
+System.out.println(converted);    // "J"
 ```
 
 接下来看看构造函数是如何使用::关键字来引用的，首先我们定义一个包含多个构造函数的简单类：
