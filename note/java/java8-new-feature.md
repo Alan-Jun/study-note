@@ -2,6 +2,8 @@
 
 Lambda表达式可以说是Java 8最大的卖点，它将函数式编程引入了Java。Lambda允许把函数作为一个方法的参数，或者把代码看成数据（对于这一点会用js的人应该不陌生）。
 
+更多 ： https://www.cnblogs.com/gu-bin/p/11225749.html
+
 ## 语法
 
 * (parameters) -> expression
