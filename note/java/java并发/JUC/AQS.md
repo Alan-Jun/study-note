@@ -16,7 +16,7 @@ AbstractQueuedLongSynchronizer **队列同步器**，是**用来构建锁或者�
 * getState()：获取当前同步状态。
 * setState(int newState)：设置当前同步状态。
 
-* compareAndSetState(int expect,int update)：使用CAS非方式设置当前状态，该方法能够保证状态
+* compareAndSetState(int expect,int update)：使用CAS方式设置当前状态，该方法能够保证状态
   设置的原子性。
 
 ## 同步器提供的模板方法
@@ -122,7 +122,7 @@ private Node enq(final Node node) {
          /*
           * Predecessor was cancelled. Skip over predecessors and
           * indicate retry.  
-          * 如果前驱放弃了(timeout or 中断了 or 获取锁的时候发生异常 )，那就一直往前找，直到找到最近一个正常等待的节点，并排在它的后边等待。
+          * 如果前驱放弃了(timeout or 中断了 or 获取锁的时候发生异常 )，那就一直往前找，直到找到最近一个正常等待的节点，并排在它的后边等待。并且中间的这些 CANCELLED 也随之移出队列
           */
          do {
              node.prev = pred = pred.prev;

@@ -11,11 +11,13 @@ JUC就是我们的 j ava.util.current 这个并发工具包它包括了
 
 ![1539076608379](../assets/1539076608379.png)
 
-从图中我们可以很明显的了解到，JUC的整个实现的基础是CAS+volatile，然后再次基础上构建了我们的 AQS(AbstractQueuedLongSynchronizer **队列同步器**，**它是用来构建锁或者其他同步组件的基础框架**），原子变量类，进而最终构建了我们最上层的工具，所以这里我们的文章讲解顺序也将和架构图中的一样，从下到上，其中非阻塞数据结构也就是我们的java容器相关的基础知识，有关于CAS，volatile的详解请看：[并发编程中的重要概念](../并发编程中的重要概念.md) 
+从图中我们可以很明显的了解到，JUC的整个实现的基础是CAS+volatile，然后在次基础上构建了我们的 AQS(AbstractQueuedLongSynchronizer **队列同步器**，**它是用来构建锁或者其他同步组件的基础框架**），原子变量类，进而最终构建了我们最上层的工具，所以这里我们的文章讲解顺序也将和架构图中的一样，从下到上，其中非阻塞数据结构也就是我们的java容器相关的基础知识；
+
+ps: 有关于CAS，volatile的详解请看：[并发编程中的重要概念](../并发编程中的重要概念.md) 
 
 # AQS
 
-一定要先看这篇[AQS](AQS.md)文章，不然没有这个只是储备下面的源码不易理解
+一定要先看这篇[AQS](AQS.md)文章，不然没有这个知识储备下面的源码不易理解
 
 # Locks
 
@@ -52,9 +54,9 @@ JUC就是我们的 j ava.util.current 这个并发工具包它包括了
 
 > 关于 wait() , notify(),notifyAll()  可以看[并发编程中的重要概念](../并发编程中的重要概念.md)
 >
-> [Lock源码](Lock源码.md)
+> [Lock源码接口定义](Lock源码接口定义.md)
 >
-> [Condition源码](Condition源码.md)
+> [Condition源码接口定义](Condition源码接口定义.md)
 >
 > InterruptedException 关于线程中断相关的可以看  [并发编程中的重要概念](../并发编程中的重要概念.md)
 
@@ -198,7 +200,7 @@ private void doSignalAll(Node first) {
 
 ## LockSupport
 
-在将AQS之前我们先来了解一下 LockSupport 工具 。在JUC中当我们需要阻塞或唤醒一个线程的时候，都会使用到LockSupport工具来完成相关工作，它定义一组公共的static方法，来实现最基本的线程阻塞和唤醒功能。
+在介绍JUC中等饿lock（实现类）工具之前我们先来了解一下 LockSupport 工具 。在JUC中当我们需要阻塞或唤醒一个线程的时候，都会使用到LockSupport工具来完成相关工作，它定义一组公共的static方法，来实现最基本的线程阻塞和唤醒功能。
 
 | 方法名                                      | 描述                                                         |
 | ------------------------------------------- | ------------------------------------------------------------ |
@@ -209,7 +211,7 @@ private void doSignalAll(Node first) {
 
 ## ReentrantLock
 
-是一个可重入的独占式同步锁，可以替代synchronized来使用，既然是锁，那么它当然要实现Lock接口中的各种类型接口了。下面我们回分析这些接口怎么用它内置的同步器来实现的
+是一个可重入的独占式同步锁，可以替代synchronized来使用，既然是锁，那么它当然要实现Lock接口中的各种类型接口了。下面我们会分析这些接口怎么用它内置的同步器来实现的
 
 **ReentrantLock支持公平锁和非公平锁这两种同步器**  
 
@@ -222,12 +224,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class ReentrantLockTest {
-    public static ReentrantLock nonFairLock = new ReentrantLock();//参数默认false，不公平锁
+    public static ReentrantLock nonFairLock = new ReentrantLock();//参数默认false，非公平锁
     private ReentrantLock lock = new ReentrantLock(true); //公平锁
 
     /**
      * 使用场景:(1)比如一个定时任务,第一次定时任务未完成,重复发起了第二次,直接返回flase;
-     * (2)用在界面交互时点击执行较长时间请求操作时，防止多次点击导致后台重复执行
+     * (2)用户在界面多次点击导致后台重复执行
      */
 
     public static void tryLockTest() {
@@ -354,7 +356,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
         }
         else if (current == getExclusiveOwnerThread()) {// 如果获取到该锁的是当前线程，执行可重入逻辑
             int nextc = c + acquires; 
-            if (nextc < 0) // overflow
+            if (nextc < 0) // overflow，重入导致int溢出
                 throw new Error("Maximum lock count exceeded");
             setState(nextc);
             return true;
@@ -485,7 +487,7 @@ static final class NonfairSync extends Sync {
 ### fair&NoFiar对比
 
 * 非公平锁在使用时，由于使用的是抢占模式（谁抢到是谁的），这样就会避免公平性锁的问题，**能更充分的利用cpu**,**以及减少线程上下文切换带来的cpu损耗**，不过也会带来问题：**会导致线程饥饿现象**
-* 公平模式，基于同步器的FIFO队列，在同步器（使用FIFO队列）中会转到等待状态，直到他的前驱节点唤醒它，这个唤醒到线程运行存在着较大延迟，带来了更多的线程上下文切换**导致对cpu的利用不够充足，以及上下文切换带来的性能损耗，也就是说会牺牲系统的吞吐量**
+* 公平模式，基于同步器的FIFO队列，在同步器（使用FIFO队列）中会转到等待状态，直到他的前驱节点唤醒它，从唤醒到线程运行存在着较大延迟，带来了更多的线程上下文切换**导致对cpu的利用不够充足，以及上下文切换带来的性能损耗，也就是说会牺牲系统的吞吐量**
 
 ## ReadWriteLock 
 
@@ -596,7 +598,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
      */
 	
     static final int SHARED_SHIFT   = 16;
-    // 2^16 :shared 单位，共享锁的技术单位。占用同步状态字段state的高于16位的位，记录共享锁的被获取的数量，使用sharedCount方法获取共享锁的被获取的数量
+    // 2^16 :shared 单位，共享锁的计数单位。占用同步状态字段state的高于16位的位，记录共享锁的被获取的数量，使用sharedCount方法获取共享锁的被获取的数量
     static final int SHARED_UNIT    = (1 << SHARED_SHIFT);
     // 2^16-1 :最大数量 锁计数器读锁/写锁分别的最大持有锁数，写锁就是重入次数限制，读锁就是获取锁的相乘数量+重入次数的总数限制
     static final int MAX_COUNT      = (1 << SHARED_SHIFT) - 1;
@@ -642,7 +644,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
      * Acquires and releases use the same code for fair and
      * nonfair locks, but differ in whether/how they allow barging
      * when queues are non-empty.
-     * 获取和释放对fair和nonfair锁使用相同的代码，但在队列为非空时它们是否/如何允许bargging方面有所
+     * 获取和释放对fair和nonfair锁使用相同的代码，但在队列为非空时它们是否/如何允许bargging有所
      * 不同。
      */
     /**
@@ -688,8 +690,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
 	 *
 	 */
     protected final boolean tryRelease(int releases) {
-        // 首先判断释放锁的线程是不是该锁当前的独占线程，只有当前的独占线程（获取到所得线程）才能释放
-        // 锁
+        // 首先判断释放锁的线程是不是该锁当前的独占线程，只有当前的独占线程（获取到锁的线程）才能释放锁
         if (!isHeldExclusively())
             throw new IllegalMonitorStateException();
         int nextc = getState() - releases;
@@ -710,7 +711,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
             getExclusiveOwnerThread() != current)
             return -1;
         int r = sharedCount(c);// 获取当前被获取的读锁的数量(获取到的线程数的重入计数的总和）
-        // readerShouldBlock 有初始化的时候选择的公平/非公平模式决定，判断方法和ReemrantLock相同
+        // readerShouldBlock 由初始化的时候选择的公平/非公平模式决定，判断方法和ReemrantLock相同
         // 并且获得锁的线程数量不能超过 MAX_COUNT 这个值也就是共享锁的最大共享次数，而不是最大贡献线程数，应为重入也会计算在内
         if (!readerShouldBlock() &&
             r < MAX_COUNT &&
@@ -723,7 +724,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
             } else {
                 HoldCounter rh = cachedHoldCounter;
                 if (rh == null || rh.tid != getThreadId(current))
-                    // 缓存当前尝试获取锁的线程的重入计数器
+                    // 缓存当前获取到锁的线程的重入计数器
                     cachedHoldCounter = rh = readHolds.get();
                 else if (rh.count == 0)
                     readHolds.set(rh);
@@ -955,7 +956,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
 
 `StampedLock`和`ReadWriteLock`相比，改进之处在于：读的过程中也允许获取写锁后写入！这样一来，我们读的数据就可能不一致，所以，需要一点额外的代码来判断读的过程中是否有写入，这种读锁是一种乐观锁。
 
-乐观锁的意思就是乐观地估计读的过程中大概率不会有写入，因此被称为乐观锁。反过来，悲观锁则是读的过程中拒绝有写入，也就是写入必须等待。显然乐观锁的并发效率更高，但一旦有小概率的写入导致读取的数据不一致，需要能检测出来，再读一遍就行。示例代码
+**乐观锁的意思就是乐观地估计读的过程中大概率不会有写入，因此被称为乐观锁。反过来，悲观锁则是读的过程中拒绝有写入，也就是写入必须等待。显然乐观锁的并发效率更高，但一旦有小概率的写入导致读取的数据不一致，需要能检测出来，再读一遍就行。**示例代码
 
 ```java
 public class Point {
@@ -997,7 +998,7 @@ public class Point {
 }
 ```
 
-和`ReadWriteLock`相比，写入的加锁是完全一样的，不同的是读取。注意到首先我们通过`tryOptimisticRead()`获取一个乐观读锁，并返回版本号。接着进行读取，读取完成后，我们通过`validate()`去验证版本号，如果在读取过程中没有写入，版本号不变，验证成功，我们就可以放心地继续后续操作。如果在读取过程中有写入，版本号会发生变化，验证将失败。在失败的时候，我们再通过获取悲观读锁再次读取。由于写入的概率不高，程序在绝大部分情况下可以通过乐观读锁获取数据，极少数情况下使用悲观读锁获取数据。
+**和`ReadWriteLock`相比，写入的加锁是完全一样的，不同的是读取。注意到首先我们通过`tryOptimisticRead()`获取一个乐观读锁，并返回版本号。接着进行读取，读取完成后，我们通过`validate()`去验证版本号，如果在读取过程中没有写入，版本号不变，验证成功，我们就可以放心地继续后续操作。如果在读取过程中有写入，版本号会发生变化，验证将失败。在失败的时候，我们再通过获取悲观读锁再次读取。由于写入的概率不高，程序在绝大部分情况下可以通过乐观读锁获取数据，极少数情况下使用悲观读锁获取数据。**
 
 可见，**`StampedLock`把读锁细分为乐观读和悲观读，能进一步提升并发效率。但这也是有代价的：一是代码更加复杂，二是`StampedLock`是不可重入锁，不能在一个线程中反复获取同一个锁。**
 
@@ -1092,7 +1093,7 @@ private static final class Sync extends AbstractQueuedSynchronizer {
 	// countDown() 方法调用的就是这个
     protected boolean tryReleaseShared(int releases) {
         // Decrement count; signal when transition to zero
-        for (;;) {
+        for (;;) {// 自旋
             int c = getState();
             if (c == 0)
                 return false;
@@ -1108,7 +1109,7 @@ private static final class Sync extends AbstractQueuedSynchronizer {
 
 CyclicBarrier的字面意思是**可循环使用（Cyclic）的屏障（Barrier）**。它要做的事情是，让一
 组线程到达一个屏障（也可以叫同步点）时被阻塞，直到最后一个线程到达屏障时，屏障才会
-开门，所有被屏障拦截的线程才会继续运行。
+打开这时候所有被屏障拦截的线程才能继续运行。
 
 **使用它的 reset() 方法可重置，重复使用**
 
@@ -1386,7 +1387,7 @@ public void reset() {
 
 1. CountDownLatch是线程组之间的等待，即一个(或多个)线程等待N个线程完成某件事情之后再执行；而CyclicBarrier则是线程组内的等待，即每个线程相互等待，即N个线程都被拦截之后，然后依次执行。
 2. CountDownLatch计数为0无法重置，而CyclicBarrier计数达到初始值，则可以重置，对象直接可重复使用。
-3. CyclicBarrier是利用 lock的Condition的wait，加入到等待队列中被park，直到被唤醒，加入到lock的同步队列中去执行 。 CountDownLatch的线程等待是被加入到了lock的线程同步队列中，被park。
+3. CyclicBarrier是利用 lock的Condition的wait，加入到等待队列中被park，直到被唤醒->加入到lock的同步队列中去执行 。 CountDownLatch的线程等待是被加入到了lock的线程同步队列中，然后被park。
 
 ## Semaphore
 
@@ -1708,7 +1709,7 @@ public class ExchangerTest {
 [1.8 新增的几个处理类](atomic/1.8新增.md)
 
 * LongAdder 高并发情况下比AtomicLong的表现要好，但是不能完全替代AtomicLong，具体的看[为什么要引入LongAdder](atomic/1.8新增.md )
-* LongAccumulator
+* LongAccumulator 是 LongAdder  增强版本
 * DoubleAdder
 * DoubleAccumulator
 

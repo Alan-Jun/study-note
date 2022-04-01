@@ -4,165 +4,52 @@
 
 # 基本使用
 
+> 先简单定义个 User 类
+
 ```java
-public class AtomicReferenceTest {        
-    public static AtomicReference<user> atomicUserRef = new AtomicReference<user>();  
-    public static void main(String[] args) {                
-        User user = new User("conan"， 15);                
-        atomicUserRef.set(user);                
-        User updateUser = new User("Shinichi"， 17);                
-        atomicUserRef.compareAndSet(user， updateUser);             
-        System.out.println(atomicUserRef.get().getName());       
-        System.out.println(atomicUserRef.get().getOld());      
-    }        
-    static class User {         
-        private String name;                
-        private int old;               
-        public User(String name， int old) {  
-            this.name = name;         
-            this.old = old;            
-        }               
-        public String getName() { 
-            return name;            
-        }            
-        public int getOld() {  
-            return old;
-                
-        }        
-    } 
+@Data
+@AllArgsConstructor
+public class User {
+    private String name;
+    private Integer age;
 }
 ```
 
-# 结构源码
+> 使用 AtomicReference 初始化，并赋值
 
 ```java
-public class AtomicReference<V> implements java.io.Serializable {
-    private static final long serialVersionUID = -1848883965231344442L;
+public static void main( String[] args ) {
+    User user1 = new User("张三", 23);
+    User user2 = new User("李四", 25);
+    User user3 = new User("王五", 20);
 
-    private static final Unsafe unsafe = Unsafe.getUnsafe();
-    private static final long valueOffset;
+	//初始化为 user1
+    AtomicReference<User> atomicReference = new AtomicReference<>();
+    atomicReference.set(user1);
 
-    //class初始化时执行
-    static {
-        try {
-            valueOffset = unsafe.objectFieldOffset
-                (AtomicReference.class.getDeclaredField("value"));
-        } catch (Exception ex) { throw new Error(ex); }
-    }
+	//把 user2 赋给 atomicReference
+    atomicReference.compareAndSet(user1, user2);
+    System.out.println(atomicReference.get());
 
-    //通过volatile关键字保证value值的可见性。
-    private volatile V value;
-    
-    // 下面是两个初始化方法
-    
-    public AtomicReference(V initialValue) {
-        value = initialValue;
-    }
-    
-    public AtomicReference() {
-    }
+	//把 user3 赋给 atomicReference
+    atomicReference.compareAndSet(user1, user3);
+    System.out.println(atomicReference.get());
 }
 ```
 
-# 数据查询修改方法
+输出结果如下：
 
-```java
-/**
- * Gets the current value. 由 volatile 做可见性保证
- *
- * @return the current value
- */
-public final V get() {
-    return value;
-}
-
-/**
- * 非原子操作，不宜在存在并发安全的地方使用
- *
- * @param newValue the new value
- */
-public final void set(V newValue) {
-    value = newValue;
-}
-
-/**
- * 我们很多原子类中都有 lazySet这样的方法，lazy 就是在不需要让共享变量的修改立刻让其他线程可见的时候，以设置普通变量的方式来修改该变量，以减少不必要的内存
- * 屏障，从而提高程序执行的效率
- * @param newValue the new value
- * @since 1.6
- */
-public final void lazySet(V newValue) {
-    unsafe.putOrderedObject(this, valueOffset, newValue);
-}
-
-
-public final boolean compareAndSet(V expect, V update) {
-    return unsafe.compareAndSwapObject(this, valueOffset, expect, update);
-}
-
-/**
- * 
- * 1.8 中该方法没有任何的特别之处，和 compareAndSet 是一样的效果，后面的版本应该会有变化
- */
-public final boolean weakCompareAndSet(V expect, V update) {
-    return unsafe.compareAndSwapObject(this, valueOffset, expect, update);
-}
-
-
-@SuppressWarnings("unchecked")
-public final V getAndSet(V newValue) {
-    return (V)unsafe.getAndSetObject(this, valueOffset, newValue);
-}
-
-/**
- * 相较于以前的方法，增加了1.8特有的，方法传值（也就是 lambda的基石）
- * @since 1.8
- */
-public final V getAndUpdate(UnaryOperator<V> updateFunction) {
-    V prev, next;
-    do {
-        prev = get();
-        next = updateFunction.apply(prev);
-    } while (!compareAndSet(prev, next));
-    return prev;
-}
-
-/**
- * @since 1.8
- */
-public final V updateAndGet(UnaryOperator<V> updateFunction) {
-    V prev, next;
-    do {
-        prev = get();
-        next = updateFunction.apply(prev);
-    } while (!compareAndSet(prev, next));
-    return next;
-}
-
-/**
- * @since 1.8
- */
-public final V getAndAccumulate(V x,
-                                BinaryOperator<V> accumulatorFunction) {
-    V prev, next;
-    do {
-        prev = get();
-        next = accumulatorFunction.apply(prev, x);
-    } while (!compareAndSet(prev, next));
-    return prev;
-}
-
-/**
- * @since 1.8
- */
-public final V accumulateAndGet(V x,
-                                BinaryOperator<V> accumulatorFunction) {
-    V prev, next;
-    do {
-        prev = get();
-        next = accumulatorFunction.apply(prev, x);
-    } while (!compareAndSet(prev, next));
-    return next;
-}
+```bash
+User(name=李四, age=25)
+User(name=李四, age=25)
 ```
 
+# 解释
+
+> compareAndSet(V expect, V update)
+
+该方法作用是：如果atomicReference==expect，就把update赋给atomicReference，否则不做任何处理。
+![image-20220401194710691](assets/image-20220401194710691.png)
+
+- atomicReference的初始值是user1，所以调用compareAndSet(user1, user2)，由于user1==user1，所以会把user2赋给atomicReference。此时值为“李四”
+- 第二次调用atomicReference.compareAndSet(user1, user3)，由于user2 != user1，所以set失败。atomicReference仍然为“李四”
