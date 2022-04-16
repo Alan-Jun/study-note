@@ -108,3 +108,5 @@ force()方法有一个boolean类型的参数，指明是否同时将文件元数
 ```
 channel.force(true);
 ```
+
+### [filechanel 零拷贝](Java NIO系列教程（五） 通道之间的数据传输.md)

@@ -102,11 +102,11 @@ public class XxxProtocolWrapper implements Protocol {
 }
 ```
 
-Wrapper 类同样实现了扩展点接口，但是 Wrapper 不是扩展点的真正实现。它的用途主要是用于从 `ExtensionLoader` 返回扩展点时，包装在真正的扩展点实现外。即从 `ExtensionLoader` 中返回的实际上是 Wrapper 类的实例，Wrapper 持有了实际的扩展点实现类。
+Wrapper 类同样实现了扩展点接口，但是 Wrapper 不是扩展点的真正实现。它的用途主要是用于从 `ExtensionLoader` 返回扩展点时，包装在真正的扩展点实现外。即从 `ExtensionLoader` 中返回的实际上是 Wrapper 类的实例，Wrapper 持有了实际的扩展点实现类。**是装饰者模式的应用，强调了对类的扩展**
 
 扩展点的 Wrapper 类可以有多个，也可以根据需要新增。
 
-通过 Wrapper 类可以把所有扩展点公共逻辑移至 Wrapper 中。**新加的 Wrapper 在所有的扩展点上添加了逻辑，有些类似 AOP，即 Wrapper 代理了扩展点。**
+通过 Wrapper 类可以把所有扩展点公共逻辑移至 Wrapper 中。**新加的 Wrapper 在所有的扩展点上添加了逻辑，有些类似 AOP，但是AOP是代理模式，它更加强调对一个实例行为的扩展**
 
 **关于Wrapper扩展类的加载这个可以读一下 ExtensionLoader#loadClass 这个方法**
 

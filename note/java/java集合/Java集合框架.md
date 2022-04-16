@@ -319,7 +319,7 @@ CopyOnWriteArrayList 在写操作的同时允许读操作，大大提高了读�
 - 内存占用：在写操作时需要复制一个新的数组，使得内存占用为原来的两倍左右；
 - 数据不一致：读操作不能读取实时性的数据，因为部分写操作的数据还未同步到读数组中。
 
-所以 CopyOnWriteArrayList 不适合内存敏感以及对实时性要求很高的场景。
+**所以 CopyOnWriteArrayList 不适合内存敏感以及对实时性要求很高的场景。**
 
 ## LinkedList
 
@@ -377,7 +377,7 @@ ArrayList 基于动态数组实现，LinkedList 基于双向链表实现。Array
 
 上面两个表共定义了*Deque*的12个接口。添加，删除，取值都有两套接口，它们功能相同，区别是对失败情况的处理不同。**一套接口遇到失败就会抛出异常，另一套遇到失败会返回特殊值（`false`或`null`）**。除非某种实现对容量有限制，大多数情况下，添加操作是不会失败的。**虽然\*Deque\*的接口有12个之多，但无非就是对容器的两端进行操作，或添加，或删除，或查看**。明白了这一点讲解起来就会非常简单。
 
-***ArrayDeque*和*LinkedList*是*Deque*的两个通用实现，由于官方更推荐使用*AarryDeque*用作栈和队列，**加之上一篇已经讲解过*LinkedList*
+***ArrayDeque*和*LinkedList*是*Deque*的两个通用实现，由于官方更推荐使用*AarryDeque*用作栈和队列，**加之上一篇已经讲解过的*LinkedList*
 
 从名字可以看出*ArrayDeque*底层通过数组实现，为了满足可以同时在数组两端插入或删除元素的需求，该数组还必须是循环的，即**循环数组（circular array）**，也就是说数组的任何一点都可能被看作起点或者终点。*ArrayDeque*是非线程安全的（not thread-safe），当多个线程同时使用的时候，需要程序员手动同步；另外，该容器不允许放入`null`元素。
 
@@ -429,7 +429,7 @@ void afterNodeInsertion(boolean evict) { }
 
 **还有一个 head , tail 执行头，尾**
 
-![LinkedHashMap](assets/939998-20160528192537725-909052596.png)
+![image-20220407104454536](assets/image-20220407104454536.png)
 
 #### `LinkedHashMap` 如何维持双向链表
 
@@ -476,7 +476,7 @@ void afterNodeInsertion(boolean evict) { }
     }
 ```
 
-看了上面的方法我们就知道为什么 `LinkedHashMap` 公用 `HashMap` 的方法也能维持一个双向链表了。
+看了上面的方法我们就知道为什么 `LinkedHashMap` 共用 `HashMap` 的方法也能维持一个双向链表了。
 
 ####  `LinkedHashMap` 迭代键值对与 `HashMap` 的对比
 
@@ -666,6 +666,8 @@ public final class ConcurrentCache<K, V> {
 ```
 
 # 参考资料
+
+https://github.com/Snailclimb/JavaGuide/blob/main/docs/java/collection/java-collection-questions-02.md
 
 - Eckel B. Java 编程思想 [M]. 机械工业出版社, 2002.
 - [Java Collection Framework](https://www.w3resource.com/java-tutorial/java-collections.php)

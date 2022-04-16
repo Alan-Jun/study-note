@@ -1,10 +1,14 @@
 # 官方介绍文档
 
+随着微服务的流行，服务和服务之间的稳定性变得越来越重要。Sentinel 是面向分布式服务架构的流量控制组件，主要以流量为切入点，从流量控制、熔断降级、系统自适应保护等多个维度来帮助您保障微服务的稳定性。
+
 https://sentinelguard.io/zh-cn/docs/introduction.html
 
 ## 他的核心功能
 
-sentinel的核心功能流量控制，熔断降级等等，都依赖它的数据统计（资源的流量，线程数，rt, 异常数...）,在sentinel中是使用[滑动窗口算法](#滑动窗口算法)来完成资源设置的时间窗口内的数据统计的
+Sentinel 是面向分布式服务架构的流量控制组件，主要以流量为切入点，从流量控制、熔断降级、系统自适应保护等多个维度来帮助您保障微服务的稳定性。
+
+sentinel它的核心功能主要是流量控制，熔断降级等等，都依赖它的数据统计（资源的流量，线程数，rt, 异常数...）,在sentinel中是使用[滑动窗口算法](#滑动窗口算法)来完成资源设置的时间窗口内的数据统计的
 
 ## 流量控制
 
@@ -203,7 +207,7 @@ sentinel的核心功能流量控制，熔断降级等等，都依赖它的数据
 
 ## 熔断降级
 
-这个比较简单，基于 上层通过滑动窗口统计到的数据和熔断降级规则做比较，符合条件的走熔断降级逻辑即可，未匹配上任何条件放行
+这个比较简单，基于上层通过滑动窗口统计到的数据和熔断降级规则做比较，符合条件的走熔断降级逻辑即可，未匹配上任何条件放行
 
 ## 系统负载保护
 
@@ -221,9 +225,39 @@ sentinel的核心功能流量控制，熔断降级等等，都依赖它的数据
 
 一个讲解该算法的博客文章：https://www.cnblogs.com/huansky/p/13488234.html
 
-代码可以参考 sentinel 的窗口实现方案，该方案还兼顾了并发场景的数据统计核心代码是LeapArray，他是一个环形的滑动窗口，内存使用率较高，它有几个参数：
+代码可以参考 sentinel 的窗口实现方案，该方案还兼顾了并发场景的数据统计核心代码是LeapArray，他是一个环形的滑动窗口，内存使用率较高，代码阅读入口 StatisticSlot ->查看其中一个统计方法即可： node.addPassRequest(count) 
 
-* windowLengthInMs 拆分的小窗口长度
+```java
+@Override
+public void addPassRequest(int count) {
+    super.addPassRequest(count);
+    this.clusterNode.addPassRequest(count);
+}
+```
+
+```java
+@Override
+public void addPassRequest(int count) {
+    rollingCounterInSecond.addPass(count);
+    rollingCounterInMinute.addPass(count);
+}
+```
+
+然后就会进入到 ArrayMetric 的 addPass 方法
+
+```java
+@Override
+public void addSuccess(int count) {
+    WindowWrap<MetricBucket> wrap = data.currentWindow();
+    wrap.value().addSuccess(count);
+}
+```
+
+统计的核心就是 ArrayMetric 以及 WindowWrap
+
+WindowWrap有几个参数：
+
+* windowLengthInMs 拆分的小窗口时间长度
 * sampleCount 小窗口的数量
 * intervalInMs 滑动窗口的总长（单位ms）
 * intervalInSecond 滑动窗口的总长（单位s）
@@ -231,15 +265,15 @@ sentinel的核心功能流量控制，熔断降级等等，都依赖它的数据
 几个核心方法实现了窗口的滑动，同时由于巧妙的环形设计，统计窗口中的计数只需要将所有小窗口的值加起来即可获取到窗口时间内的总值，这时候就可以直接判断是否应该拦截请求了，如果可以通过，就可以使用下面的方法来给当前时间对应的窗口叠加一次新的计数
 
 * currentWindow 方法：用于在放行条件下选取最新的小窗口增加计数，同时窗口的滑动逻辑也在其中
-* calculateTimeIdx 方法：用于currentWindow内部逻辑中计算得到当前时间的窗口位置索引位置
-* calculateWindowStart 方案： 用户 currentWindow 内部逻辑中计算得到当前时间对应的窗口的startTime
+* calculateTimeIdx 方法：用于currentWindow内部逻辑中帮助计算当前时间的窗口索引位置
+* calculateWindowStart 方案： 用于在 currentWindow 内部逻辑中帮助计算当前时间对应的窗口的startTime
 
 ```java
 public WindowWrap<T> currentWindow(long timeMillis) {
     if (timeMillis < 0) {
         return null;
     }
-		// 计算当前数据对应的窗口索引
+		// 计算当前时间对应的窗口索引,方法解释再下文中有
     int idx = calculateTimeIdx(timeMillis);
     // 计算当前时间对应的窗口的startTime
     long windowStart = calculateWindowStart(timeMillis);
@@ -327,7 +361,47 @@ public WindowWrap<T> currentWindow(long timeMillis) {
 
 ```
 
+LeapArray的
 
+```java
+// 计算当前时间对应的窗口索引
+private int calculateTimeIdx(/*@Valid*/ long timeMillis) {
+	/*
+	*     B0       B1      B2    NULL      B4
+	* ||_______|_______|_______|_______|_______||___
+	* 200     400     600     800     1000    1200  timestamp
+	*/
+  // 假如我们窗口总大小是 600ms,分了三个小窗口 windowLengthInMs = 200ms
+  // 0 / 200 = 0
+  // 100 / 200 = 0
+  // 101 / 200 = 0
+  // 200 / 200 = 1
+  // 399 / 200 = 1
+  // 400 / 200 = 2
+  // 600 / 200 = 3 , 3 % 3 = 0 ,也就是需要放在0这个位置，此时滑动窗口也就滑动了
+  long timeId = timeMillis / windowLengthInMs;
+  // Calculate current index so we can map the timestamp to the leap array.
+  return (int)(timeId % array.length());
+}
+
+// 计算当前时间对应的窗口的startTime
+protected long calculateWindowStart(/*@Valid*/ long timeMillis) {
+  /**
+   * 如何知道一个小窗口的startTimeMillis呢 ？假如我们窗口总大小是 600ms,分了三个小窗口    
+   * windowLengthInMs = 200ms ， 我们可以先枚举一些例子：
+   * timeMillis=0 ； = 0 - 0 % 200 = 0 ，  它应该是放在 0 - 200 这个窗口中的
+	 * timeMillis=111 ； = 111 - 111 % 200 = 0 ， 他也是放在 0 - 200 这个窗口中的
+	 * timeMillis=200 ； = 200 - 200 % 200 = 200 ， 他也是放在 200 - 400 这个窗口中的
+ 	 * timeMillis=600 ； = 600 - 600 % 200 = 600 ， 他也是放在 600 - 800 这个窗口中的
+ 	 * 规律已经很明显了，但是我们一般不回算 endTime, 因为这是一个循环数组，它真实的情况应该可能是下面这样 
+ 	 * 的:
+ 	 *      B0       B1      B2    NULL      B4
+	 *  |_______|_______|_______|_______|_______|
+	 * 1200     400     600     800     1000    
+	 */
+  return timeMillis - timeMillis % windowLengthInMs;
+}
+```
 
 该算法还有一种实现方式，本质思想是转换概念，将原本问题的通过确定时间范围去进行次数限制。转换成线确定次数大小，然后再来进行时间限制。这种方式由于需要记录每一次请求的time 实现起来会更费内存一些，而上面一种实现方式消耗更多的是拆分的窗口数量的内存
 
@@ -489,8 +563,8 @@ public class RateLimiterController implements TrafficShapingController {
 
         long currentTime = TimeUtil.currentTimeMillis();
         // Calculate the interval between every two requests.
-      	// count 是qps , 1s / count 可以得到没一个请求的令牌的生成速率，* 1000 是把单位换算成ms 
-      	// acquireCount * (1.0 * / count * 1000) 处理 acquireCount 请求需要消耗多少ms
+      	// count 是qps , 1s 能生成 count个令牌，* 1000 是把单位换算成ms 
+      	// acquireCount 个请求需要消耗多少ms，acquireCount/count 拿到占比，再*1000ms 就能获取到需要消耗的时间
         long costTime = Math.round(1.0 * (acquireCount) / count * 1000);
 
         // Expected pass time of this request.

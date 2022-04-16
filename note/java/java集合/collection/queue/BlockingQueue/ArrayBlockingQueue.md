@@ -76,16 +76,22 @@ public E take() throws InterruptedException {
     }
 }
 
-private void enqueue(E x) {
-        // assert lock.getHoldCount() == 1;
-        // assert items[putIndex] == null;
-        final Object[] items = this.items;
-        items[putIndex] = x;// 队尾插入数据
-        if (++putIndex == items.length)// putIndex 移动（循环数组）
-            putIndex = 0;
-        count++;// 计数+1
-        notEmpty.signal();// 唤醒 take 处等待的线程
-    }
+private E dequeue() {
+    // assert lock.getHoldCount() == 1;
+    // assert items[takeIndex] != null;
+    final Object[] items = this.items;
+    @SuppressWarnings("unchecked")
+    E x = (E) items[takeIndex];//获取队首数据
+    items[takeIndex] = null;// 删除队首数据
+    if (++takeIndex == items.length)// takeIndex 移动（循环数组）
+        takeIndex = 0;
+    count--;// 计数-1
+    if (itrs != null)
+        itrs.elementDequeued();
+    notFull.signal();// 唤醒 put 方法处被阻塞的线程
+    return x;
+}
+
 ```
 
 # Put()
@@ -104,21 +110,17 @@ public void put(E e) throws InterruptedException {
     }
 }
 
-private E dequeue() {
-    // assert lock.getHoldCount() == 1;
-    // assert items[takeIndex] != null;
-    final Object[] items = this.items;
-    @SuppressWarnings("unchecked")
-    E x = (E) items[takeIndex];//获取队首数据
-    items[takeIndex] = null;// 删除队首数据
-    if (++takeIndex == items.length)// takeIndex 移动（循环数组）
-        takeIndex = 0;
-    count--;// 计数-1
-    if (itrs != null)
-        itrs.elementDequeued();
-    notFull.signal();// 唤醒 put 方法处被阻塞的线程
-    return x;
+private void enqueue(E x) {
+  // assert lock.getHoldCount() == 1;
+  // assert items[putIndex] == null;
+  final Object[] items = this.items;
+  items[putIndex] = x;// 队尾插入数据
+  if (++putIndex == items.length)// putIndex 移动（循环数组）
+    putIndex = 0;
+  count++;// 计数+1
+  notEmpty.signal();// 唤醒 take 处等待的线程
 }
+
 ```
 
 # boolean offer(E e)
@@ -165,16 +167,14 @@ public E poll(long timeout, TimeUnit unit) throws InterruptedException {
 
 **ArrayBlockingQueue的优缺点**：
 
-* **优点**：空间预非配（有界数组，需要先指定容量大小），相比链表实现，减少了创建对象带来的性能损耗，内
-
-  存连续，对内存的使用更友好，不容易造成内存碎片
+* **优点**：空间预非配（有界数组，需要先指定容量大小），相比链表实现，减少了创建对象带来的性能损耗，内存连续，对内存的使用更友好，不容易造成内存碎片
 
 * **相比LinkedBlockingQueue的缺点**：ArrayBlockingQueue 使用一把锁同步了所有操作，吞吐量相比 LinkedBlockingQueue 低  
 
 **LinkedBlockingQueue优缺点**：
 
 * **缺点**：相比来说，新增数据需要频繁的新建对象。会带来损耗，使用了双锁，也就意味着 队列的count存在 并发问题，所以要使用 AtomicInteger 来保证线程间的可见性，
-* **优点**：采用双锁，实现put,take并发执行，不仅弥补了链表的创建对象的时间损耗，同时大大的提高了并发性能，相比ArrayBlockingQueue的 吞吐量更高
+* **优点**：采用双锁，实现put,take并发执行（读写可并发），不仅弥补了链表的创建对象的时间损耗，同时大大的提高了并发性能，相比ArrayBlockingQueue的 吞吐量更高
 
 # ArrayBlockingQueue 可以采用双锁实现吗？
 
@@ -212,5 +212,7 @@ ArrayBlockingQueue 可以采用双锁实现吗？ 答案是可以，如果采用
 这样实现的代价
 
 1. 代码复杂度
-2. count需要使用AtomicInteger 实现，也就是 volatile + CAS 自旋 ，这个会有性能损耗
-3. take 的时候要使用notFull.Singall唤醒 put操作被等待的线程的时候，需要先去获取putlock，同理put操作也是类似的，再看我们的同步队列使用场景，是生产消费模型，take 需要获取 putLock, put 需要 获取takeLock,生产消费线程数量越接近相等的情况，那么相互竞争锁的程度会越来越激烈，那么该实现相对于原来的实现，性能提升效果也就越不明显。
+
+2. count需要使用AtomicInteger 实现，也就是 volatile + CAS 自旋 ，这个会有性能损耗，但是相比读写同步的性能开销要强很多
+
+   

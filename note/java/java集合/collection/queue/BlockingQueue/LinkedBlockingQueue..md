@@ -112,7 +112,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         Node<E> first = h.next;
         h.next = h; // help GC
         head = first;
-        E x = first.item;// 获取并
+        E x = first.item;// 获取值
         first.item = null;// 移除队首
         return x;
     }

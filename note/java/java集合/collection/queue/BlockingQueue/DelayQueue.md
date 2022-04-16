@@ -50,6 +50,29 @@ private Thread leader = null;
 private final Condition available = lock.newCondition();
 ```
 
+
+
+**offer**
+
+```java
+public boolean offer(E e) {
+    final ReentrantLock lock = this.lock;
+    lock.lock();
+    try {
+        q.offer(e);
+        if (q.peek() == e) {
+            leader = null;
+            available.signal();
+        }
+        return true;
+    } finally {
+        lock.unlock();
+    }
+}
+```
+
+
+
 **take**
 
 ```java
@@ -68,13 +91,15 @@ public E take() throws InterruptedException {
                 first = null; // don't retain ref while waiting
                 /**
                  * 我们知道我们队列是一个最小堆的实现，那么first也就是最需要最小延时的节点，如果一个
-                 * 线程走到这的时候，需要延时，那就需要调用 available.awaitNanos(delay); 这就释放了
-                 * 锁，下一个线程过来，如果还是这一个节点，那么如果还调available.awaitNanos(delay);
-                 * 方法的话，可能出现的情况就是 这两个线程间隔时间很短，几乎先后被唤醒，那么很可能存在锁争
-                 * 抢情况,所以针对这种情况，这里使用了 Leader-Follower pattern 避免这样的情况，第一
-                 * 个过来的线程，会设置为 leader 调用 available.awaitNanos(delay); 后面的线程发现
-                 * 自己不是leader 就会调用 available.await(); leader 恢复之后，它一定(finally)
-                 * 将leader设置为null,并且它一定会（finally）唤醒他们
+                 * 线程走到这的时候，需要延时，那就需要调用 available.awaitNanos(delay); 这个方法
+                 * 将会释放锁，下一个线程就能够进入同步块逻辑，如果堆的root还是同一节点，那如果还调
+                 * available.awaitNanos(delay);方法的话，可能会出现多个线程在同一个时间被唤醒
+                 * 那么很可能存在锁争抢情况,所以针对这种情况，这里使用了 Leader-Follower pattern 
+                 * 避免这样的情况第一个过来的线程，会设置为 leader 调用 
+                 * available.awaitNanos(delay); 后面线程发现自己不是leader 就会调用 
+                 * available.await();这样就避免了竞争的发生，leader 恢复之后，它一定
+                 * (finally)将leader设置为null,并且它一定会（finally）唤醒他们
+                 * 
                  */
                 if (leader != null)
                     available.await();// 如果不是leader 被阻塞置入 available的等待队列
@@ -97,6 +122,8 @@ public E take() throws InterruptedException {
         lock.unlock();// 释放锁
     }
 }
+
+
 ```
 
 # 例子
@@ -140,7 +167,7 @@ class Item implements Delayed {
         Item item = (Item) o;
         long diff = this.delayTime - item.delayTime;
         if (diff <= 0) {
-            return -1;java
+            return -1; // 延迟小的排前面
         } else {
             return 1;
         }

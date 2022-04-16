@@ -1,6 +1,6 @@
 * 1.7 开始 静态常量池 就移动到了 java heap
 * 1.8 移除了PermGen Space，新增了，Metaspace
-  * Metaspace 是一个 可伸缩
+  * Metaspace 内存大小可伸缩
 
 **移除 PermGen Space 作为 类元数据存放区域的原因**
 

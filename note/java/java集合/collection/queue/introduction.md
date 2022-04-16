@@ -256,9 +256,7 @@ public interface Delayed extends Comparable<Delayed> {
 
 **ArrayBlockingQueue的优缺点**：
 
-* **优点**：空间预非配（有界数组，需要先指定容量大小），相比链表实现，减少了创建对象带来的性能损耗，内
-
-  存连续，对内存的使用更友好，不容易造成内存碎片
+* **优点**：空间预分配（有界数组，需要先指定容量大小），相比链表实现，减少了创建对象带来的性能损耗，内存连续，对内存的使用更友好，不容易造成内存碎片
 
 * **相比LinkedBlockingQueue的缺点**：ArrayBlockingQueue 使用一把锁同步了所有操作，吞吐量相比 LinkedBlockingQueue 低  
 

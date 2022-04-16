@@ -10,7 +10,13 @@
 
  设置jvm使server模式，特点是启动速度比较慢，但运行时性能和内存管理效率很高，适用于生产环境。在具有64位能力的jdk环境下将默认启用该模式，而忽略-client参数。 
 
+
+
+**jvm参数： https://blog.csdn.net/qq_27529917/article/details/86664677**
+
 # jdk1.7 方法区内存配置参数
+
+
 
 -XX:MaxPermSize=128m  
 
@@ -70,6 +76,10 @@
 ```
  -Xprof 
 ```
+
+# int缓存
+
+-XX:AutoBoxCacheMax
 
 # 在JVM启动后，在命令行中可以输出所有XX参数和值 
 

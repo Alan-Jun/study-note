@@ -10,72 +10,20 @@ JVM基于进入和退出Monitor对象来实现方法同步和代码块同步。�
 
 根据虚拟机规范的要求，在执行monitorenter指令时，首先要去尝试获取对象的锁，如果这个对象没被锁定，或者当前线程已经拥有了那个对象的锁，把锁的计数器加1；相应地，在执行monitorexit指令时会将锁计数器减1，当计数器被减到0时，锁就释放了。如果获取对象锁失败了，那当前线程就要阻塞等待，直到对象锁被另一个线程释放为止。
 
+synchronized是排它锁，当一个线程获得锁之后，其他线程必须等待该线程释放锁后才能获得锁，**而且由于Java中的线程和操作系统原生线程是一一对应的，线程被阻塞或者唤醒时时会从用户态切换到内核态，这种转换非常消耗性能。**
+
 注意：
 
-1、synchronized同步快对同一条线程来说是可重入的，不会出现自己把自己锁死的问题；
+1、synchronized同步块对同一条线程来说是可重入的，不会出现自己把自己锁死的问题；
 
+如果再深入到源码来说，synchronized实际上有两个队列waitSet和entryList。
 
+1. 当多个线程进入同步代码块时，首先进入entryList
+2. 有一个线程获取到monitor锁后，就赋值给当前线程，并且计数器+1
+3. 如果线程调用wait方法，将释放锁，当前线程置为null，计数器-1，同时进入waitSet等待被唤醒，调用notify或者notifyAll之后又会进入entryList竞争锁
+4. 如果线程执行完毕，同样释放锁，计数器-1，当前线程置为null
 
-**看一下一份代码编译后的字节码**
-
-```java
-public class SyncTest {
-    public void syncBlock(){
-        synchronized (this){
-            System.out.println("hello block");
-        }
-    }java
-    public synchronized void syncMethod(){
-        System.out.println("hello method");
-    }
-}
-```
-
-```java
-{
-  public void syncBlock();
-    descriptor: ()V
-    flags: ACC_PUBLIC
-    Code:
-      stack=2, locals=3, args_size=1
-         0: aload_0
-         1: dup
-         2: astore_1
-         3: monitorenter				 	  // monitorenter指令进入同步块
-         4: getstatic     #2                  // Field java/lang/System.out:Ljava/io/PrintStream;
-         7: ldc           #3                  // String hello block
-         9: invokevirtual #4                  // Method java/io/PrintStream.println:(Ljava/lang/String;)V
-        12: aload_1
-        13: monitorexit						  // monitorexit指令退出同步块
-        14: goto          22
-        17: astore_2
-        18: aload_1
-        19: monitorexit						  // monitorexit指令退出同步块
-        20: aload_2
-        21: athrow
-        22: return
-      Exception table:
-         from    to  target type
-             4    14    17   any
-            17    20    17   any
- 
-
-  public synchronized void syncMethod();
-    descriptor: ()V
-    flags: ACC_PUBLIC, ACC_SYNCHRONIZED      //添加了ACC_SYNCHRONIZED标记
-    Code:
-      stack=2, locals=1, args_size=1
-         0: getstatic     #2                  // Field java/lang/System.out:Ljava/io/PrintStream;
-         3: ldc           #5                  // String hello method
-         5: invokevirtual #4                  // Method java/io/PrintStream.println:(Ljava/lang/String;)V
-         8: return
- 
-}
-```
-
-从上面的中文注释处可以看到，对于`synchronized`关键字而言，`javac`在编译时，会生成对应的`monitorenter`和`monitorexit`指令分别对应`synchronized`同步块的进入和退出，有两个`monitorexit`指令的原因是：为了保证抛异常的情况下也能释放锁，所以`javac`为同步代码块添加了一个隐式的try-finally，在finally中会调用`monitorexit`命令释放锁。而对于`synchronized`方法而言，`javac`为其生成了一个`ACC_SYNCHRONIZED`关键字，在JVM进行方法调用时，发现调用的方法被`ACC_SYNCHRONIZED`修饰，则会先尝试获得锁。
-
-在JVM底层，对于这两种`synchronized`语义的实现大致相同，在后文中会选择一种进行详细分析。
+![image-20220405120830291](assets/image-20220405120830291.png)
 
 # synchronized中的多级锁
 
@@ -87,6 +35,10 @@ public class SyncTest {
 * 重量级锁
 
 上诉的几个状态随着竞争情况的逐渐升级，锁的状态也会随之改变，**需要注意的是：锁可以升级但是不能降级**
+
+![image-20220406141538130](assets/image-20220406141538130.png)
+
+ps: https://mp.weixin.qq.com/s/-xFSHf7Gz3FUcafTJUIGWQ 这个链接中的文章也可阅读
 
 ## java对象头结构
 
@@ -122,13 +74,13 @@ public class SyncTest {
 
   ![image-20200412221956700](assets\image-20200412221956700.png)
 
-* 判断是否为可偏向状态（锁的对象头的mark woed 中的 thread id 不存在，是否是偏向锁 `1`,锁标志位`01`）
+* 判断是否为可偏向状态（锁的对象头的mark woed 中的 thread id 不存在&&是否是偏向锁 `1`,锁标志位`01`）
 
   这时候线程才可以使用CAS操作将自己的线程id写入到 锁的对象头的mark word中
 
 * 如果是已偏向状态（thread id 存在了），只需判断该id是否等于当前线程的id
   * 相等，那就继续执行代码快
-  * 不相等，证明该同步块存在线程竞争，需要撤销偏向锁（在这过程中锁会膨胀成轻量锁）
+  * **不相等，证明该同步块存在线程竞争，需要撤销偏向锁（在这过程中锁会膨胀成轻量锁）**
 
 ### 偏向锁的撤销
 
@@ -138,7 +90,7 @@ public class SyncTest {
   * 通过 MarkWord 中已经存在的 Thread Id 找到成功获取了偏向锁的那个线程, 然后在该线程的栈帧中补充上轻量级加锁时， 会保存的锁记录（Lock Record）， 然后将被获取了偏向锁对象的 MarkWord 更新为* 指向这条锁记录的指针。
   * 至此， 锁撤销操作完成， 阻塞在安全点的线程可以继续执行。
 
-### 偏向锁的在偏向机制
+### 偏向锁的再偏向机制
 
 * 从偏向锁状态的mark word中的数据我们可以看到一个epoch的值，这个值就代表了该thread id对象相乘的偏向时效性
 * 除了对象中的 epoch, 对象所属的类 class 信息中， 也会保存一个 epoch 值
@@ -180,6 +132,14 @@ java线程在执行同步块之前，JVM会先在当前线程的这一**栈帧�
 
 如果线程获得锁后调用`Object#wait`方法，则会将线程加入到WaitSet中，当被`Object#notify`唤醒后，会将线程从WaitSet移动到cxq或EntryList中去。需要注意的是，当调用一个锁对象的`wait`或`notify`方法时，**如当前锁的状态是偏向锁或轻量级锁则会先膨胀成重量级锁**。
 
+# 锁消除
+
+JVM在JIT运行时，对一些代码要求同步而实际该段代码在数据共享上不可能出现竞争的锁而进行消除操作
+
+# 锁粗化
+
+对于相同锁定对象的相邻同步代码块，JVM为了提高性能，就会对同步范围进行粗化，把锁放在第一个操作加上，然后在最后一个操作中释放，这样就只加了一次锁但是达到了同样的效果。
+
 # Synchronized和ReentrantLock的区别
 
 1. Synchronized是JVM层次的锁实现，ReentrantLock是JDK层次的锁实现；
@@ -195,4 +155,55 @@ java线程在执行同步块之前，JVM会先在当前线程的这一**栈帧�
 > * 《并发编程的艺术》
 >* https://blog.csdn.net/lengxiao1993/article/details/81568130
 > * https://github.com/farmerjohngit/myblog/issues/12
+
+# 从JVM和操作系统聊一聊java的锁
+
+这块面试人员希望了解到的是关于，我们对java锁的理解
+
+java的锁我们常用的有 Synchronized 以及JUC相面的那些锁工具，这里我主要说一下Synchronized，他是完全和ReentrantLock ，早期 ReentrantLock 性能是优于Synchronized的但是 从jdk 1.6 以后他们的性能差距就不那么明显了，因为对其做了很多的优化，JDK 开发团队为了减少且降低了线程上线文切换的代价，引入了 **偏向锁，轻量级锁，以及自旋优化；**
+
+为什么早期 Synchronized 的性能比 ReentrantLock差呢？因为早期的时候 Synchronized 完全依赖锁对象的monitor 来实现的同步，无论同步代码块是否存在竞争都直接走monitor同步逻辑：获取monitor锁，获取失败放入同步等待队列，同时通过操作系统将线程挂起，以及后续的线程唤醒参与竞争都会涉及到**线程的用户态到内核态的上下文切换**：因为cpu的切换它是由操作系统内核提供的，用户程序是无法直接访问cpu的，线程的执行本质上是cpu操作的，线程的切换自然需要cpu切换执行，cpu的访问是操作系统才能操作的，那么必然存在从用户态切换到内核太，这个切换也是需要cpu做切换的，会有一个中断，然后cpu保存当前的执行现场（因为它再次切换回来的时候需要指从从哪开始继续执行），然后才能切换到内核态
+
+![image-20220408181431770](assets/image-20220408181431770.png)
+
+> ps:
+>
+> 切换线程上下文，需要保护和恢复寄存器数据
+>
+> 2、切换到执行内核线程的时候，内核代码对用户不信任，需要进行额外的检查。
+>
+> 3、内核线程执行完返回过程有很多额外工作，比如检查是否需要调度等
+>
+> 4、如果被切换的线程属于不同用户程序间切换的话，那么还要更新cr3寄存器，这样会更换每个程序的虚拟内存到物理内存映射表的地址
+>
+> *  https://blog.csdn.net/mydriverc2/article/details/113185189
+> * https://blog.csdn.net/u010727189/article/details/103401970?spm=1001.2101.3001.6650.1&utm_medium=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1.pc_relevant_default&depth_1-utm_source=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1.pc_relevant_default&utm_relevant_index=2
+
+所以这是一个很重的操作，这也就是**重量级锁名称的由来**，而偏向锁是：锁不存在竞争的时候使用的
+
+轻量级锁是：锁的竞争不是那么激烈的时候使用CAS（compare and swap）来快速的完成线程的切换
+
+什么是不存在竞争呢？也就是我们虽然使用了同步锁，但是同步代码块一直由一个线程在执行
+
+什么是锁竞争不激烈？同步代码块的执行是线程交替执行的？
+
+![image-20220406141538130](assets/image-20220406141538130.png)
+
+**偏向锁**实现方式：[索引](#轻量级锁)
+
+**轻量级锁**实现方式：[索引](#偏向锁)
+
+**自旋优化**：是其实是在重量级锁的逻辑中的入队操作（将线程放入锁的同步队列）前增加的一个了一个尝试再次获取锁的操作，目的是为了避免线程被挂起（阻塞），这样就能减少线程切换带来的性能开销；自旋也是有代价的，不能自旋过长时间（会占用cpu时间），也不能太短（本来再尝试一次就能获取锁成功从而导致线线程被阻塞），所以这里的自旋逻辑做了自适应的优化：比如对象刚刚的一次自旋操作成功过，那么认为这次自旋成功的可能性会高，就多自旋几次；反之，就少自旋甚至不自旋；
+
+
+
+
+
+
+
+rocktMq : 可靠性，顺序性，事务怎么保证实现了
+
+kafka : 可靠性，顺序性，性能怎么做到的，数据怎么拷贝的，事务怎么保证实现了 
+
+
 

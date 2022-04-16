@@ -1,4 +1,4 @@
-## Java NIO系列教程（五） 通道之间的数据传输(零拷贝技术)
+# Java NIO系列教程（五） 通道之间的数据传输(零拷贝技术)
 
 原文地址：http://tutorials.jenkov.com/java-nio/scatter-gather.html
 
@@ -8,7 +8,13 @@
 
 
 
-在Java NIO中，如果两个通道中有一个是FileChannel，那你可以直接将数据从一个channel（译者注：channel中文常译作通道）传输到另外一个channel。
+在Java NIO中，如果两个通道中有一个是FileChannel，那你可以直接将数据从一个channel（译者注：channel中文常译作通道）传输到另外一个channel。也就是可以实现 fileChanel -> socketChanel , socketChanel -> fileChannel ; fileChanel1 -> fileChanel2 的零拷贝
+
+零拷贝利用的其实是 操作系统的sendFile()能力，也就是它不回经过从用户缓冲区到内核的缓冲从区的一次拷贝，再从内核拷贝到目标穿冲去这样的两次拷贝操作，而是只需发起一次sendFile (),操作系统内核直接在内核中将相关的buffer的数据传输到目的地的buffer，也不会有多余的用户态到内核态的上下文切换
+
+**[零拷贝之mmap和sendFile和splice](零拷贝之mmap和sendFile.md)**
+
+# sendFile/splice
 
 **transferFrom()**
 
@@ -50,3 +56,6 @@ fromChannel.transferTo(position, count, toChannel);
 是不是发现这个例子和前面那个例子特别相似？除了调用方法的FileChannel对象不一样外，其他的都一样。
 上面所说的关于SocketChannel的问题在transferTo()方法中同样存在。SocketChannel会一直传输数据直到目标buffer被填满。
 
+# mmap
+
+https://zhuanlan.zhihu.com/p/27698585

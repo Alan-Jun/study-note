@@ -75,7 +75,7 @@ public interface TransactionStatus extends TransactionExecution, SavepointManage
     // 调用完setRollbackOnly()后，数据库可以继续执行select，但不允许执行update语句，因为事务只可以进行读取操作，任何修改都不会被提交。
     @Override
     void setRollbackOnly();
-	// setRollbackOnly() 执行后 这个isRollbackOnly()方法会fanhuitrue
+	// setRollbackOnly() 执行后 这个isRollbackOnly()方法会返回true
     @Override
     boolean isRollbackOnly();
 
@@ -363,7 +363,7 @@ public class AccountServiceImp implements AccountService {
 
 **异常被正常捕获**
 
-**数据也没有任何变化，即使外层不活了异常但是事务还是回滚了所有操作**
+**数据也没有任何变化，即使外层捕获了异常但是事务还是回滚了所有操作**
 
 
 
