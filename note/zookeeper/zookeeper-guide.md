@@ -225,3 +225,16 @@ delete path [version]
 需要注意的是 要删除一个节点必须保证他没有子节点，如果穿在子节点，需要将子节点全部删除，在删除目标节点。
 
 ### Zookeeper的Java 客户端api 使用：
+
+
+
+# zookeeper读写请求方式
+
+https://www.csdn.net/tags/NtzaMg1sNzAyMTctYmxvZwO0O0OO0O0O.html
+
+写请求交给 leader 是因为 zookeeper的分布式一致性协议决定的
+
+# Zookeeper 的脑裂问题
+
+https://blog.csdn.net/zxylwj/article/details/103608916
+

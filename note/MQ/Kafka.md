@@ -1,6 +1,10 @@
 # 快速入门
 
-本文内容来自《Apache kfka 源码刨析》
+本文内容来自《Apache kfka 源码刨析》，以及网络上的博客，有引用的博客我都会贴链接，感谢你们的分享帮助我们能够更快的阅读源码
+
+> 网络上的博客：
+>
+> * https://cloud.tencent.com/developer/article/1821020
 
 # 简介
 
@@ -61,25 +65,60 @@ zstd, lz4, snappy, gzip，不过配置的话是可以配置：
 
 ## consumer
 
+根据下文consumer group 中提到的 topic 的partition 和 consumer消费的关系，如果我们要在保证顺序性的条件下，充分利用机器资源，可以使用线程池，每一个线程单独做一个 consumer ，这样可以利用到单机的多核资源；
 
+如果没有顺序要求，还可以设置成单机多consumer 多消费线程的两个线程池的模型
 
 ## Consumer group
 
 kafka 中多个consumer可以组成一个 consumer group ，一个consumer只能属于一个consumer group；同一个下的消息只会被 相同的 consumer group 下一个consumer 消费；不同consumer group间互不干扰，意味着如果希望实现“广播”消费，可以将每一个consumer放入一个独立的consumer group
 
+consumer group 除了提供了 “独占”和“广播”模式的消息处理之外，它还可以实现消费者的水平扩展和故障转移
+
+topic中的 partition 不管是”独占“还是“广播”，partition 都是唯一对应到一个partition的，也就是说如果partition 和consumer 刚好想等那就是1:1，如果 partition的数量大于consumer的数量那就会拿就会根据Kafka提供的负载均衡方法来分成分配，那就会出现多个partition对应到一个consumer ，但是不回出现一个partition被多个consumer消费的情况。这是Kafka保证消息有序的设计。
+
+<img src="assets/image-20220416195207742.png" alt="image-20220416195207742" style="zoom:50%;" />
 
 
-# 数据持久化
 
-![image-20220416150330157](assets/image-20220416150330157.png)
+当topic 下面
 
-# 扩展与容灾
+consumer的数量发生变化的时候会触发，partition的 rebalance , 实现的方式是:每个consumer group 在 broker 会有一个 GroupCoordinator一一对应，它是Kafka用于管理consumer group的组件，GroupCoordinator 会在zookeeper 维护consumer的元数据（有多少consumer，partition负载后的结果等）在每一次consumer加入或退出的时候，GroupCoordinator 会在完成负载均很之后修改zookeeper的信息：负载是在客户端完成的，最终由GroupCoordinator来和zookeeper交互。为什么不让每个 consumer客户端和zookeeper交互的？因为可能发生 "羊群效应" / [“脑裂问题”](https://blog.csdn.net/zxylwj/article/details/103608916) （因为consumer链接到的是不同zookeeper结点，但是这时候发生了脑裂问题。读取到的数据长时间不一致就会导致负载均衡出现问题）
 
-# 顺序保证
+ 所以才去了中心化的 GroupCoordinator 来负责处理，同时GroupCoordinator只是维护分区的负载相关信息以及同时consumer进行负载均衡分配：GroupCoordinator 会从可用的consumer中选一个做个 group leader，然后获取当前配置的分区策略，最后将这些信息response给consumer，consumer收到消息确定自己是leader (只有是leader的consumer才能获取到所有信息)然后该consumer根据获取到的分区策略进行分区分配
 
-# 缓冲&峰值处理能力
+接下来，所有consumer进入Synchronizing Group State阶段，所有consumer会向GroupCoordinator发送**SyncGroupRequest**，其中只有consumer leader的请求信息中包含了分区结果，GroupCoordinator会根据这个结果组建SyncGroupResponse信息给到consumer。consumer解析它即可获取到自身的分区信息。
 
-# 异步通信
+在整个rebalance的过程中，所有partition都会被回收，consumer是无法消费任何 partition的。Join阶段会等待原先组内存活的成员发送**JoinGroupRequest**过来，如果原先组内的成员因为业务处理一直没有发送请求过来，服务端就会一直等待，直到超时。
+
+为了减少因为consumer短暂不可用造成的rebalance，kafka在2.3版本中引入了Static Membership。
+
+然后 kafka 2.4 版本中 新增了 Incremental Cooperative Rebalance 协议 
+
+详情：https://cloud.tencent.com/developer/article/1821020
+
+> GroupCoordinator 中还维护了分区和consumer group 的消费关系。记录了consumer消费的offset （cunsumer 一次poll() 消费之后需要提交数据给到 GroupCoordinator ）
+
+## Retention Policy & Log compaction
+
+对 kafka 有一定了解的同学可能知道，无论 message 是否已经被 consumer 消费，kafka 都会长时间保留 message 信息，这种设计是为了方便 consumer 回退到某个 offset，并重新开始消费。
+
+但是，kafka 毕竟不是[数据库](https://cloud.tencent.com/solution/database?from=10680)，不应该一直保存历史 message，尤其是那些已经确定不会再使用的历史 message。我们可以通过修改 kafka 的 retention policy 配置（保留策略）来实现周期性清理历史 message 的效果。
+
+kafka 默认提供了有两种 retention policy：
+
+1. 根据 message 保留的时间进行清理的策略，其具体含义是：当一条 message 在 kafka 集群中保存的时间超过了指定阈值，就可以被后台线程清理掉
+2. 根据 topic 占用磁盘大小进行清理的策略，其具体含义是：当 topic 的 log 小大于一个阈值之后，则可以开始由后台线程删除最旧的 message。
+
+kafka 的 retention policy 可以针对全部 topic 进行配置，还可以针对某个 topic 进行特殊的配置。 
+
+除了 retention policy 之外，kafka 还提供了 log compaction（日志压缩）来减少磁盘占用量。我们知道 message 由 key 和 value 两部分构成， 如果一个 key 值对应的 value 值不断被更新，且 consumer 只关心最新的 value 值，那么我们就可以开启 log compaction 功能来压缩日志，核心原理是：
+
+kafka 会启动一个后台压缩线程，定期将 key 相同的 message 进行合并，只保留最新的 value 值。
+
+下图展示了一次 log compaction 的工作过程：
+
+<img src="assets/1620.png" alt="img" style="zoom:60%;" />
 
 # 压缩
 
@@ -188,7 +227,7 @@ Kafka会采用简单的负载均衡方式找到注册连接数最少的selector�
 
 4. broker端也会有消息压缩
 
-   目前支持 zstd, lz4, snappy, gzip
+   目前支持 zstd, lz4, snappy, gzip，因为需要解压数据
 
    服务端的配置是可以配置：
 
@@ -200,7 +239,7 @@ Kafka会采用简单的负载均衡方式找到注册连接数最少的selector�
 
 6. IO使用顺序IO利用操作系统的 PageCache , 同时使用mmap 减少了一次 用户态数据到内核数据的拷贝 **broker使用到**
 
-7. 在保证消息可靠性的前提下，提供了一个高性能的数据同步方案 ： ISR ， Hw ,LEO 设计 **broker使用到**
+7. 在保证消息可靠性的前提下，提供了一个高性能的数据同步方案 ： ISR(In Sync replica) ， HighWatermark ,Log End Offset 设计 **broker使用到**
 
 8. 不提供push 到consumer的能力，简化了设计，降低了这一块的性能损耗，而是将消息消费完全交给 consumer pull, consumer 可以根据offset 自己选择从哪里开始消费
 
