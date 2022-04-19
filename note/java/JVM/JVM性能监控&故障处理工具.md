@@ -248,12 +248,10 @@ where <option> is one of:
 
 ###  参数解释
 
-![image-20200620155951816](assets/image-20200620155951816.png)
-
 | 选项           | 作用                                                         |
 | -------------- | ------------------------------------------------------------ |
 | -heap          | 显示java堆详细信息，如使用哪种回收器，参数配置，分代的情况<br />[-heap操作示例](#heap操作示例) |
-| -finalizerinfo | 现在在F-Queue队列中登陆态Finalizer线程执行finalize方法的对象<br />[-finalizerinfo操作示例](#finalizerinfo操作示例) |
+| -finalizerinfo | 现在在F-Queue队列中Finalizer线程执行finalize方法的对象<br />[-finalizerinfo操作示例](#finalizerinfo操作示例) |
 | -histo[:live]  | 显示堆中对象的统计信息，包括类，实例数量，合计容量<br />`jmap -histo pid` <br/>如果带上live则只统计活对象，`  jmap -histo:live pid`<br/> 如果需要把结果输出到文件中<br/> `jmap -histo:live pid > /opt/histo.txt`<br/> 这样可以把统计结果输出到opt目录下的histo.txt 文件中<br/> vim /opt/histo.txt 即可查看<br />如果在查询的时候不知看一部分可以使用 `jmap -histo:live 1|head -n 30`, 这样可以看占用内存最大的30条，[示例](#histo示例) |
 | -dump          | 生成jvm的堆转储快照格式：-dump:[live],format=b,file=文件路径/文件名.hprof( .hprof 文件后缀，分析工具会解析这样的文件 )，live参数是决定是否只dump存活的对象的数据 |
 |                |                                                              |

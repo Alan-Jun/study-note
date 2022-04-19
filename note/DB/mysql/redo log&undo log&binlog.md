@@ -120,7 +120,7 @@ binlog的格式也有三种：STATEMENT、ROW、MIXED 。
 
 ## 基本概念
 
-undo log 是逻辑日志，他和redo log 一样会先存放到 undo log buffer 中，然后在刷到磁盘（机制和redo 差不多）与redo log不同的是，磁盘上通常不存在单独的undo log文件，所有的undo log均存放在主ibd数据文件中（表空间），mysql5.7开始可以设置 undo log存放到单独的地方。
+undo log 是逻辑日志，undo日志用于存放数据修改被修改前的值,他和redo log 一样会先存放到 undo log buffer 中，然后在刷到磁盘（机制和redo 差不多）与redo log不同的是，磁盘上通常不存在单独的undo log文件，所有的undo log均存放在主ibd数据文件中（表空间），mysql5.7开始可以设置 undo log存放到单独的地方。
 
 **undo log 有两个作用：**
 
