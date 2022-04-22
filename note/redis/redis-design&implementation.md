@@ -109,7 +109,7 @@ redis为了确保可以适用于各种场景，`sds`的`api`都是二进制安�
 typedef struct listNode{
     // 前置节点
     struct listNode *prev;
-    // 后置节点
+      // 后置节点
     struct listNode *next;
     // 节点的值
     void *value;
@@ -431,7 +431,7 @@ typedef struct redisObject{
 
   ![image-20200509163606431](assets/image-20200509163606431.png)
 
-  相对非 embstr的来说，由于内存分配适合 redisObject陪配在一起的连续**内存，所以只需要分配一次**；**释放自然也是只需要一次操作了**；**保存在一块连续内存中意味着我们查找会更快一些**
+  相对非 embstr的来说，embstr内存分配时 redisObject 会分配包含了value对象空间的连续**内存，所以只需要分配一次**；**释放自然也是只需要一次操作了**；**保存在一块连续内存中意味着我们查找会更快一些**
 
 - [动态字符串](#简单动态字符串 sds)对象 ： redis 自定义的动态字符串结构 存储
 
@@ -440,6 +440,8 @@ typedef struct redisObject{
 **部分命令的底层实现**：
 
 ![image-20200511152956378](assets/image-20200511152956378.png)
+
+
 
 ### 列表（lists）
 

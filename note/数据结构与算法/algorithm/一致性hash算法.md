@@ -136,9 +136,38 @@
 98 }
 ```
 
-[![复制代码](https://common.cnblogs.com/images/copycode.gif)](javascript:void(0);)
 
- 
+
+可以看一下 treeMap的 ceilingEntry方法，理解查找树的概念的能很容易看懂这个代码，所以如果不了解的可以学习一下查找树的概念
+
+```
+final Entry<K,V> getCeilingEntry(K key) {
+    Entry<K,V> p = root;
+    while (p != null) {
+        int cmp = compare(key, p.key);
+        if (cmp < 0) {
+            if (p.left != null)
+                p = p.left;
+            else
+                return p;
+        } else if (cmp > 0) {
+            if (p.right != null) {
+                p = p.right;
+            } else {
+                Entry<K,V> parent = p.parent;
+                Entry<K,V> ch = p;
+                while (parent != null && ch == parent.right) {
+                    ch = parent;
+                    parent = parent.parent;
+                }
+                return parent;
+            }
+        } else
+            return p;
+    }
+    return null;
+} 
+```
 
 ​    main()方法执行结果如下，可以看到，hash值分布的距离比较开阔。
 
