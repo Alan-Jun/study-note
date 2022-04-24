@@ -402,3 +402,96 @@ jstack [option] <pid>
 
  
 
+# GC 日志查看
+
+## 日志分析
+
+### gc 日志配置
+
+| 命令                           | 含义                                     |                                                              |
+| ------------------------------ | ---------------------------------------- | ------------------------------------------------------------ |
+| -verbose:gc                    | 等价于 -XX:+PrintGC， 设置日志级别 fine. | -XX:+PrintGC 是非文档版本<br />-verbose:gc 稳定版本          |
+| -verbose:class                 |                                          | 查看类加载情况                                               |
+| -verbose:jni                   |                                          | 查看本地方法调用的情况                                       |
+| -XX:+PrintGCDetails            | 设置日志级别为finer                      | 使用此选项会显示一下信息：<br />1. 每个阶段的 Average, Min, 以及 Max 时间.<br />2. 根扫描(Root Scan), RSet 更新(同时处理缓冲区信息), RSet扫描(Scan), 对象拷贝(Object Copy), 终止(Termination, 包括尝试次数).<br />3. 还显示 “other” 执行时间, 比如选择 CSet, 引用处理(reference processing), 引用排队(reference enqueuing) 以及释放(freeing) CSet等.<br />4. 显示 Eden, Survivors 以及总的 Heap 占用信息(occupancies). |
+| -XX:+PrintGCDateStamps         | 在每条记录前加上日期时间.                | 2012-05-02T11:16:32.057+0200: [GC pause (young) 46M->35M(1332M), 0.0317225 secs] |
+| -XX:+PrintReferenceGC          | GC处理Reference的耗时-                   | 2022-04-13T19:14:37.954-0800: [GC pause (G1 Humongous Allocation) (young) (initial-mark)2022-04-13T19:14:37.957-0800: [SoftReference, 0 refs, 0.0000331 secs]2022-04-13T19:14:37.957-0800: [WeakReference, 5 refs, 0.0000117 secs]2022-04-13T19:14:37.957-0800: [FinalReference, 51 refs, 0.0000507 secs]2022-04-13T19:14:37.957-0800: [PhantomReference, 0 refs, 0 refs, 0.0000165 secs]2022-04-13T19:14:37.957-0800: [JNI Weak Reference, 0.0000129 secs], 0.0035537 secs]<br/>   [Parallel Time: 1.9 ms, GC Workers: 8]<br />.......................... |
+| -Xloggc                        | 指定gc日志输出到什么目录的文件中         | 例如：-Xloggc:/data/logs/gc.log                              |
+| -XX:+OmitStackTraceInFastThrow | jvm 默认开启的                           | 当打印同样错误日志到一定次数就会被jvm默认优化掉。<br/>我们在实际使用中肯定是不希望无法看到异常栈信息的，因为我们需要它定位问题，所以可以配置成-XX:-OmitStackTraceInFastThrow 来关闭它 |
+| -XX:G1LogLevel=finest          | 指定日志级别                             |                                                              |
+
+
+
+### 设置日志细节(Log Detail)
+
+(1) -verbosegc (等价于 -XX:+PrintGC) 设置日志级别为 好 fine.
+
+日志输出示例
+
+```clojure
+[GC pause (G1 Humongous Allocation) (young) (initial-mark) 24M- >21M(64M), 0.2349730 secs]
+
+[GC pause (G1 Evacuation Pause) (mixed) 66M->21M(236M), 0.1625268 secs]    
+```
+
+(2) -XX:+PrintGCDetails 日志输出示例
+
+```clojure
+[Ext Root Scanning (ms): Avg: 1.7 Min: 0.0 Max: 3.7 Diff: 3.7]
+
+
+[Eden: 818M(818M)->0B(714M) Survivors: 0B->104M Heap: 836M(4096M)->409M(4096M)]
+```
+
+(3) -XX:+UnlockExperimentalVMOptions -XX:G1LogLevel=finest 设置日志级别为最好 finest. 和 finer 级别类似, 包含每个 worker 线程信息.
+
+```csharp
+[Ext Root Scanning (ms): 2.1 2.4 2.0 0.0
+
+
+
+           Avg: 1.6 Min: 0.0 Max: 2.4 Diff: 2.3]
+
+
+
+       [Update RS (ms):  0.4  0.2  0.4  0.0
+
+
+
+           Avg: 0.2 Min: 0.0 Max: 0.4 Diff: 0.4]
+
+
+
+           [Processed Buffers : 5 1 10 0
+
+
+
+           Sum: 16, Avg: 4, Min: 0, Max: 10, Diff: 10]
+```
+
+### Determining Time
+
+有两个参数决定了GC日志中打印的时间显示形式.
+
+(1) -XX:+PrintGCTimeStamps - 显示从JVM启动时算起的运行时间.
+
+日志输出示例
+
+```css
+1.729: [GC pause (young) 46M->35M(1332M), 0.0310029 secs]
+```
+
+(2) -XX:+PrintGCDateStamps - 在每条记录前加上日期时间.
+
+日志输出示例
+
+```css
+2012-05-02T11:16:32.057+0200: [GC pause (young) 46M->35M(1332M), 0.0317225 secs]
+```
+
+### 日志查看
+
+https://blog.csdn.net/weixin_33905756/article/details/92698567?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522164958090416781683955895%2522%252C%2522scm%2522%253A%252220140713.130102334.pc%255Fall.%2522%257D&request_id=164958090416781683955895&biz_id=0&utm_medium=distribute.pc_search_result.none-task-blog-2~all~first_rank_ecpm_v1~rank_v31_ecpm-1-92698567.142
+
+在日志中看到 G1 Humongous Allocation 表示是有大对象（超过region 50% 的对象）的频繁分配
+
