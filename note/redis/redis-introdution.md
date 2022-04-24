@@ -1785,7 +1785,7 @@ http://www.redis.cn/commands/scan.html
 
 ### ZADD
 
-`ZADDkey [NX|XX] [CH] [INCR] score member [score member ...]`
+`ZADD key [NX|XX] [CH] [INCR] score member [score member ...]`
 
 > **起始版本：1.2.0**
 >
@@ -2040,3 +2040,22 @@ https://www.runoob.com/redis/scripting-script-flush.html
 杀死当前正在运行的 Lua 脚本。
 
 https://www.runoob.com/redis/scripting-script-kill.html
+
+# PUB/SUB
+
+http://www.redis.cn/topics/pubsub.html
+
+**pub/Sub为什么被抛弃?**
+关于Redis的Pub/Sub为什么被抛弃，最主要的原因是它无法持久化，没有实现持久化机制的Pub/Sub，无法做到消息的不丢失，在客户端宕机或者Redis服务宕机的情况下，都会导致消息丢失。
+
+客户端宕机，客户端无法接收消息
+Redis服务宕机，没有客户端能连接上，肯定也无法接收到消息
+大部分情况下，我们都不会用到Redis去做消息中间件，市面上成熟且好用的消息中间件非常多，
+
+**如果真的需要使用Redis来做消息中间件，可以考虑Redis 5.0的新数据结构[Stream](https://www.runoob.com/redis/redis-stream.html)，这个功能在Pub/Sub的基础上，实现了持久化机制，并且大力借鉴了kafka的设计原理，完善了Redis用于实现消息队列的不足之处。**
+
+# Pipeline
+
+https://blog.csdn.net/w1lgy/article/details/84455579
+
+https://blog.csdn.net/chenqiushi123/article/details/109486150

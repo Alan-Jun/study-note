@@ -1,3 +1,13 @@
+# 简介
+
+ZooKeeper: A Distributed Coordination Service for Distributed Applications
+
+ZooKeeper主要**服务于分布式系统**，可以用ZooKeeper来做：统一配置管理、统一命名服务、分布式锁、集群管理。
+
+使用分布式系统就无法避免对节点管理的问题(需要实时感知节点的状态、对节点进行统一管理等等)，而由于这些问题处理起来可能相对麻烦和提高了系统的复杂性，ZooKeeper作为一个能够**通用**解决这些问题的中间件就应运而生了。
+
+
+
 ## 安装部署
 
 集群部署

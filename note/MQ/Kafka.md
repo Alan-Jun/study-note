@@ -85,7 +85,12 @@ topic中的 partition 不管是”独占“还是“广播”，partition 都是
 
 consumer的数量发生变化的时候会触发，partition的 rebalance , 实现的方式是:每个consumer group 在 broker 会有一个 GroupCoordinator一一对应，它是Kafka用于管理consumer group的组件，GroupCoordinator 会在zookeeper 维护consumer的元数据（有多少consumer，partition负载后的结果等）在每一次consumer加入或退出的时候，GroupCoordinator 会在完成负载均很之后修改zookeeper的信息：负载是在客户端完成的，最终由GroupCoordinator来和zookeeper交互。为什么不让每个 consumer客户端和zookeeper交互的？因为可能发生 "羊群效应" / [“脑裂问题”](https://blog.csdn.net/zxylwj/article/details/103608916) （因为consumer链接到的是不同zookeeper结点，但是这时候发生了脑裂问题。读取到的数据长时间不一致就会导致负载均衡出现问题）
 
- 所以才去了中心化的 GroupCoordinator 来负责处理，同时GroupCoordinator只是维护分区的负载相关信息以及同时consumer进行负载均衡分配：GroupCoordinator 会从可用的consumer中选一个做个 group leader，然后获取当前配置的分区策略，最后将这些信息response给consumer，consumer收到消息确定自己是leader (只有是leader的consumer才能获取到所有信息)然后该consumer根据获取到的分区策略进行分区分配
+所以使用了中心化的 GroupCoordinator 来负责处理，同时GroupCoordinator只是维护分区的负载相关信息以及同时consumer进行负载均衡分配：GroupCoordinator 会从可用的consumer中选一个做个 group leader（这个操作只会在唯一的 leader broker 上完成），然后获取当前配置的分区策略，最后将这些信息response给consumer，consumer收到消息确定自己是leader (只有是leader的consumer才能获取到所有信息)然后该consumer根据获取到的分区策略进行分区分配
+
+> 1. 每个 consumer group 在服务端只会有唯一的一个 GroupCoordinator，
+>
+> 2. consumer 加入一个consumer group/GroupCoordinator发生故障转移的时候，consumer 并不知道GroupCoordinator位置
+> 3. 但是consumer 会向任意broker发送Consumer Meta Request ，请求中包含了 所在的consumer group的group id, 收到请求的broker会将GroupCoordinator相关信息放入response中给到consumer
 
 接下来，所有consumer进入Synchronizing Group State阶段，所有consumer会向GroupCoordinator发送**SyncGroupRequest**，其中只有consumer leader的请求信息中包含了分区结果，GroupCoordinator会根据这个结果组建SyncGroupResponse信息给到consumer。consumer解析它即可获取到自身的分区信息。
 

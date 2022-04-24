@@ -380,6 +380,10 @@ API :
 
 ![image-20200511151411408](assets/image-20200511151411408.png)
 
+# quickList
+
+https://zhuanlan.zhihu.com/p/102422311
+
 # redis对象（上层数据结构）
 
 ## 对象的底层结构定义
@@ -453,7 +457,9 @@ typedef struct redisObject{
 
   > ![image-20200511154905250](assets/image-20200511154905250.png)
 
--   [双端链表](#双端链表)
+- [双端链表](#双端链表)
+
+-   [quickList](https://zhuanlan.zhihu.com/p/102422311)
 
 ### 集合（sets）
 
@@ -553,3 +559,10 @@ typedef struct redisObject{
 
  ![image-20200622153609869](assets/image-20200622153609869.png)
 
+# HyperLoglog解决统计问题
+
+https://mp.weixin.qq.com/s/9dtGe3d_mbbxW5FpVPDNow
+
+# **BloomFilter**
+
+https://blog.csdn.net/wuhuayangs/article/details/121830094
