@@ -43,6 +43,8 @@ partition是Kafka水平扩展的基础，我们可以通过增加服务器（bro
 
 partition在逻辑上对应了一个log，当生产者的消息写入到Kafka的partition的时候，实际上是写入到了partition对应的log中，log是一个逻辑概念，对应到磁盘上的一个文件夹，log由多个segment组成：每个segment对应了一个索引文件（稀疏索引），为了避免出现超大文件，每个日志文件的大小是有限制的(1G )，当超过限制后会创建新的segment，Kafka采用的是顺序I/O，所以只会向最新的segment追加数据，这样可以很好的利用操作系统的[page cache](https://zhuanlan.zhihu.com/p/68071761) 能力，[加速磁盘的读写从而避免的读写磁盘导致的性能瓶颈](https://blog.csdn.net/qian_348840260/article/details/108830550).
 
+> **partition日志会存储在 <topic_name>_<partitionId> 目录下，然后再是会按照每个文件1G的大小分segment，每个segment做了一个稀疏索引文件**
+>
 > ps: page cache 中的一个页的大小一般是4k/8k
 
 消息在broker 端 也会涉及到消息压缩，目前支持的压缩方式有
@@ -50,6 +52,14 @@ partition在逻辑上对应了一个log，当生产者的消息写入到Kafka的
 zstd, lz4, snappy, gzip，不过配置的话是可以配置：
 
 ：uncompressed（不压缩）, zstd, lz4, snappy, gzip, producer（使用和生产者相同的压缩方式）
+
+#### partition leader 崩溃恢复
+
+崩溃broker（controler）会重新ISR集合中选取leader https://blog.csdn.net/pengweismile/article/details/118072015
+
+具体的做法是，Kafka在zk 有一个brokers的 Znode controller 会watch这个节点的变化，broker 在其中创建的都是临时节点，一旦断开心跳节点消失，watch 会通知到controler ，然后controller 会查到该挂掉的broker中有哪些partition是leader，然后会对这些partition做leader的重新选举，选举的方式很简单，直接在ISR集合中找一个可用的节点即可，ISR集合中的节点维护的都是Kafka承诺可靠并commit的消息，在崩溃中丢失的非HW的消息会在client中通过callback获取到发送失败的消息，同样的HW后的数据对consumer也是不可见的
+
+> ISR 同步是默认使用的同步方式
 
 ## provider
 
@@ -124,6 +134,14 @@ kafka 会启动一个后台压缩线程，定期将 key 相同的 message 进行
 下图展示了一次 log compaction 的工作过程：
 
 <img src="assets/1620.png" alt="img" style="zoom:60%;" />
+
+# Kafka 的可靠性保障
+
+acks 参数配置：
+
+1. 0：producer 不等待 broker 的 ack，这一操作提供了一个最低的延迟，broker 一接收到还 没有写入磁盘就已经返回，当 broker 故障时有可能丢失数据；
+2. 1：producer 等待 broker 的 ack，partition 的 leader 落盘成功后返回 ack，不管follower是否同步成功。如果在 follower 同步成功之前 leader 故障，那么将会丢失数据
+3. -1（all）：producer 等待 broker 的 ack，partition 的 leader 和 follower （ISRL里的follower，不是全部的follower）全部落盘成功后才 返回 ack。但是如果在 follower 同步完成后，broker 发送 ack 之前，leader 发生故障，那么会造成数据重复 （这个功能需要partition具有多副本，如果只有一台机器，其实和1是一样的）
 
 # 压缩
 
