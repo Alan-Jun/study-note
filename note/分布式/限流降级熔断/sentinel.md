@@ -6,9 +6,9 @@ https://sentinelguard.io/zh-cn/docs/introduction.html
 
 ## 他的核心功能
 
-Sentinel 是面向分布式服务架构的流量控制组件，主要以流量为切入点，从流量控制、熔断降级、系统自适应保护等多个维度来帮助您保障微服务的稳定性。
+Sentinel 是面向分布式服务架构的流量控制组件，主要以流量为切入点，从流量控制、熔断降级、系统自适应保护等多个维度来帮助我们保障微服务的稳定性。
 
-sentinel它的核心功能主要是流量控制，熔断降级等等，都依赖它的数据统计（资源的流量，线程数，rt, 异常数...）,在sentinel中是使用[滑动窗口算法](#滑动窗口算法)来完成资源设置的时间窗口内的数据统计的
+sentinel它的核心功能主要是流量控制，熔断降级等等，这些都依赖它的数据统计（资源的流量，线程数，rt, 异常数...）,在sentinel中是使用[滑动窗口算法](#滑动窗口算法)来完成资源设置的时间窗口内的数据统计的
 
 ## 流量控制
 
@@ -494,15 +494,7 @@ public class LeakyBucketLimiter {
 
 注意如果考虑线程安全问题加锁处理/或则使用atomic然后通过自旋来处理并发问题
 
-## 令牌桶算法
-
-和漏桶算法不同，令牌桶是为了在限制数据的平均传输速率的同时还允许某种程度的突发传输而设计的
-
-go的普通的令牌痛的实现：https://github.com/kevinyan815/gocookbook/issues/27
-
-
-
-java部分可以参考sentinel的令牌算发的代码，和普通实现稍有不同，sentinel支持的实现支持一定的等待时常
+java部分可以参考sentinel的漏桶算法的代码，sentinel支持的实现支持一定的等待时常
 
 ```java
 /*
@@ -606,3 +598,8 @@ public class RateLimiterController implements TrafficShapingController {
 
 ```
 
+## 令牌桶算法
+
+和漏桶算法不同，令牌桶是为了在限制数据的平均传输速率的同时还允许某种程度的突发传输而设计的
+
+go的普通的令牌痛的实现：https://github.com/kevinyan815/gocookbook/issues/27

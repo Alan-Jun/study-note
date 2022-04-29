@@ -157,7 +157,7 @@ public E take() throws InterruptedException {
     } finally {
         takeLock.unlock();
     }
-    if (c == capacity)// 队列中有即将有空位了，唤醒put处被阻塞等待的线程
+    if (c == capacity)// 队列中有空位可以插入数据了，唤醒被阻塞的put线程
         signalNotFull();
     return x;
 }
@@ -177,14 +177,6 @@ public void put(E e) throws InterruptedException {
     final AtomicInteger count = this.count;
     putLock.lockInterruptibly();// 获取 put lock
     try {
-        /*
-         * Note that count is used in wait guard even though it is
-         * not protected by lock. This works because count can
-         * only decrease at this point (all other puts are shut
-         * out by lock), and we (or some other waiting put) are
-         * signalled if it ever changes from capacity. Similarly
-         * for all other uses of count in other wait guards.
-         */
         while (count.get() == capacity) {
             notFull.await();// 队列满，需要阻塞等待
         }

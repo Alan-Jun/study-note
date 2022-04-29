@@ -79,6 +79,12 @@ zstd, lz4, snappy, gzip，不过配置的话是可以配置：
 
 如果没有顺序要求，还可以设置成单机多consumer 多消费线程的两个线程池的模型
 
+
+
+https://www.cnblogs.com/buttercup/p/14208062.html
+
+https://blog.csdn.net/weixin_42131628/article/details/113580928
+
 ## Consumer group
 
 kafka 中多个consumer可以组成一个 consumer group ，一个consumer只能属于一个consumer group；同一个下的消息只会被 相同的 consumer group 下一个consumer 消费；不同consumer group间互不干扰，意味着如果希望实现“广播”消费，可以将每一个consumer放入一个独立的consumer group
@@ -139,7 +145,7 @@ kafka 会启动一个后台压缩线程，定期将 key 相同的 message 进行
 
 acks 参数配置：
 
-1. 0：producer 不等待 broker 的 ack，这一操作提供了一个最低的延迟，broker 一接收到还 没有写入磁盘就已经返回，当 broker 故障时有可能丢失数据；
+1. 0：producer 不等待 broker 的 ack，这一操作提供了一个最低的延迟，broker 一接收到还没有写入磁盘就已经返回，当 broker 故障时有可能丢失数据；
 2. 1：producer 等待 broker 的 ack，partition 的 leader 落盘成功后返回 ack，不管follower是否同步成功。如果在 follower 同步成功之前 leader 故障，那么将会丢失数据
 3. -1（all）：producer 等待 broker 的 ack，partition 的 leader 和 follower （ISRL里的follower，不是全部的follower）全部落盘成功后才 返回 ack。但是如果在 follower 同步完成后，broker 发送 ack 之前，leader 发生故障，那么会造成数据重复 （这个功能需要partition具有多副本，如果只有一台机器，其实和1是一样的）
 

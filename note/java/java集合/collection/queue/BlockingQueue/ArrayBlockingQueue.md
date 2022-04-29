@@ -213,6 +213,6 @@ ArrayBlockingQueue 可以采用双锁实现吗？ 答案是可以，如果采用
 
 1. 代码复杂度
 
-2. count需要使用AtomicInteger 实现，也就是 volatile + CAS 自旋 ，这个会有性能损耗，但是相比读写同步的性能开销要强很多
+2. count需要使用AtomicInteger 实现，也就是 volatile + CAS 自旋 ，这个会有性能损耗，但是相比读写同步的性能开销也要低得多
 
    
