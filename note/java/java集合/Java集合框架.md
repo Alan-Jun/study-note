@@ -70,7 +70,7 @@ private static final int DEFAULT_CAPACITY = 10;
 
 ### 2. 扩容
 
- **当数组存不下新元素时，对数组进行扩容**，
+**扩容条件** ： 当数组存不下新元素时，对数组进行扩容
 
 **新容量的大小为 `oldCapacity + (oldCapacity >> 1)`，也就是旧容量的 1.5 倍。**
 

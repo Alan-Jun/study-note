@@ -436,6 +436,8 @@ private Entry getEntryAfterMiss(ThreadLocal<?> key, int i, Entry e) {
 
 * 一种是 TheadLocal 是被强引用的情况：由于 TheadLocal 变量被强引用着，无法对其进行内存擦除，会导致上面描述的内存泄露（一个 threadLocal实例，100个value实例，100个entry实例）
 
-* 一种是仅弱引用的情况：这个是 Josh Bloch 和 Doug Lea 对TheadLocal 的优化，为了避免非 static TheadLocal变量内存泄漏设计的内存擦除方案，利用弱饮用的特性，线程执行完成之后，非 static TheadLocal变量的引用在发生gc回收之后被移除线程虚拟机栈之后，也就是thread 中的 threadLocals的中的这个Key,value 的key得到了释放，但是value 是没法释放的，因为被线程的 threadLocals 持有了强引用，所以我们为了避免这种内存泄漏问题，需要在每次使用完之后执行 remove方法
+* 一种是仅弱引用的情况：这个是 Josh Bloch 和 Doug Lea 对TheadLocal 的优化，为了避免非 static TheadLocal变量内存泄漏设计的内存擦除方案，利用弱饮用的特性，线程执行完成之后，非 static TheadLocal变量的引用在发生gc回收之后被移除线程虚拟机栈之后，也就是thread 中的 threadLocals的中的这个Key,value 的key得到了释放 key=null，但是value 是没法释放的，因为被线程的 threadLocals 持有了强引用，所以我们为了避免这种内存泄漏问题，需要在每次使用完之后执行 remove方法
 
+  由于我们threadLocalMap 是通过线性探测解决冲突的，所以在访问一个线程的threadLocalMap的时候如果发现key=null. 也是会去清理这个泄漏的内存的，不过还是在使用完成之后正常屌用remove()会更好一些
+  
   

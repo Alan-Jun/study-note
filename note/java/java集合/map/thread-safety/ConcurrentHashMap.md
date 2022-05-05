@@ -83,7 +83,7 @@ public ConcurrentHashMap(int initialCapacity) {
 
 这个初始化方法有点意思，通过提供初始容量，计算了 `sizeCtl，sizeCtl = 【 (1.5 * initialCapacity + 1)`，然后向上取最近的 2 的 n 次方】。如 initialCapacity 为 10，那么得到 sizeCtl 为 16，如果 initialCapacity 为 11，得到 sizeCtl 为 32。
 
-sizeCtl 这个属性使用的场景很多，不过只要跟着文章的思路来，就不会被它搞晕了。
+**sizeCtl 这个属性使用的场景很多，不过只要跟着文章的思路来，就不会被它搞晕了。**
 
 如果你爱折腾，也可以看下另一个有三个参数的构造方法，这里我就不说了，大部分时候，我们会使用无参构造函数进行实例化，我们也按照这个思路来进行源码分析吧。
 
@@ -182,10 +182,53 @@ final V putVal(K key, V value, boolean onlyIfAbsent) {
             }
         }
     }
-    // 
+    // 这个方法内部会做是否扩容的判断
     addCount(1L, binCount);
     return null;
 }
+
+private final void addCount(long x, int check) {
+  CounterCell[] as; long b, s;
+  if ((as = counterCells) != null ||
+      !U.compareAndSwapLong(this, BASECOUNT, b = baseCount, s = b + x)) {
+    CounterCell a; long v; int m;
+    boolean uncontended = true;
+    if (as == null || (m = as.length - 1) < 0 ||
+        (a = as[ThreadLocalRandom.getProbe() & m]) == null ||
+        !(uncontended =
+          U.compareAndSwapLong(a, CELLVALUE, v = a.value, v + x))) {
+      // U.compareAndSwapLong(a, CELLVALUE, v = a.value, v + x) 增加计数
+      fullAddCount(x, uncontended);
+      return;
+    }
+    if (check <= 1)
+      return;
+    s = sumCount(); // 获取当前容器中元素的总量
+  }
+  if (check >= 0) {
+    Node<K,V>[] tab, nt; int n, sc;
+    // s >= sizeCtl 也就是超过负载了，需要扩容，sizeCtl在表未初始化的时候hash表的总容量也是容器的总容量，后续就会变成负载因子指定的扩容limit,
+    while (s >= (long)(sc = sizeCtl) && (tab = table) != null &&
+           (n = tab.length) < MAXIMUM_CAPACITY) {
+      int rs = resizeStamp(n);
+      if (sc < 0) { // 其他线程已经开始执行扩容了
+        if ((sc >>> RESIZE_STAMP_SHIFT) != rs || sc == rs + 1 ||
+            sc == rs + MAX_RESIZERS || (nt = nextTable) == null ||
+            transferIndex <= 0)
+          break;
+        if (U.compareAndSwapInt(this, SIZECTL, sc, sc + 1))
+          // 辅助扩容
+          transfer(tab, nt);
+      }
+      else if (U.compareAndSwapInt(this, SIZECTL, sc,
+                                   (rs << RESIZE_STAMP_SHIFT) + 2))
+        // 开始扩容
+        transfer(tab, null);
+      s = sumCount();
+    }
+  }
+}
+
 ```
 
 put 的主流程看完了，但是至少留下了几个问题，第一个是初始化，第二个是扩容，第三个是帮助数据迁移，这些我们都会在后面进行一一介绍。
@@ -269,6 +312,11 @@ private final void treeifyBin(Node<K,V>[] tab, int index) {
 ```
 
 #### 扩容：tryPresize
+
+**什么时候触发扩容？**
+
+1. **在树化的时候会先去判断数组的长度是否小于64，就执行数组扩容**
+2. **数组中总节点数大于阈值(数组长度的0.75倍)**
 
 如果说 `Java8 ConcurrentHashMap` 的源码不简单，那么说的就是**扩容操作和迁移操作**。
 
@@ -551,7 +599,9 @@ private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
 
 这个时候，再回去仔细看 tryPresize 方法可能就会更加清晰一些了。
 
-#### get 过程分析
+#### get 过程分析(不需要使用锁)
+
+**get利用了 volatile 来保证了数据的可见性** 
 
 get 方法从来都是最简单的，这里也不例外：
 
@@ -593,6 +643,8 @@ public V get(Object key) {
 
 简单说一句，此方法的大部分内容都很简单，只有正好碰到扩容的情况，ForwardingNode.find(int h, Object k) 稍微复杂一些，不过在了解了数据迁移的过程后，这个也就不难了，所以限于篇幅这里也不展开说了。
 
+**因为只有在原来的table 该的相同位置的数据已经迁移完成，oldTable的`i`位置的数据都迁移nextTable中，oldTable的`i`位置才会替换成 ForwardingNode， ForwardingNode的find 是在 nextTable 中查询数据，所以查询是不需要锁的,基于数据volatile的可见性即可**
+
 **size 方法优化**
 
 JDK1.8 `ConcurrentHashMap#size` 统计方法还是比较简单的：
@@ -613,6 +665,14 @@ JDK1.8 `ConcurrentHashMap#size` 统计方法还是比较简单的：
 通过上面的努力，统计元素总数就变得非常简单，只要计算 `baseCount` 与 `counterCells`总和，整个过程都不需要加锁。
 
 仔细回味一下，`counterCells` 也是通过类似分段锁思想，减少多线程竞争。
+
+
+
+## ConcurrentHashMap 哪些保证的是哪些操作的线程安全
+
+1. put 保证了对hash表的桶的操作，以及挂链的操作是并发安全的，不会出现并发put,n个hash相等的key，最后只插入成功<n个key ，保证容量计数的准确性
+
+2. 同理remove.....
 
 ## ConcurrentHashMap一定线程安全吗？
 

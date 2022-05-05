@@ -948,6 +948,8 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
 
 ## StampedLock
 
+https://mp.weixin.qq.com/s/gjfeayR36vDAr3FAVd4w4g
+
 前面介绍的`ReadWriteLock`可以解决多线程同时读写问题
 
 如果我们深入分析`ReadWriteLock`，会发现它有个潜在的问题：如果有线程正在读，写线程需要等待所有读线程释放锁后才能获取写锁，即读的过程中不允许写，这是一种悲观的读锁。
