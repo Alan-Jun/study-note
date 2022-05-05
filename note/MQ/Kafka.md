@@ -5,6 +5,7 @@
 > 网络上的博客：
 >
 > * https://cloud.tencent.com/developer/article/1821020
+> * https://mp.weixin.qq.com/s/sFUvgaQUXSA8b4hshhbwOQ
 
 # 简介
 
@@ -91,32 +92,128 @@ kafka 中多个consumer可以组成一个 consumer group ，一个consumer只能
 
 consumer group 除了提供了 “独占”和“广播”模式的消息处理之外，它还可以实现消费者的水平扩展和故障转移
 
-topic中的 partition 不管是”独占“还是“广播”，partition 都是唯一对应到一个partition的，也就是说如果partition 和consumer 刚好想等那就是1:1，如果 partition的数量大于consumer的数量那就会拿就会根据Kafka提供的负载均衡方法来分成分配，那就会出现多个partition对应到一个consumer ，但是不回出现一个partition被多个consumer消费的情况。这是Kafka保证消息有序的设计。
+topic中的 partition 不管是”独占“还是“广播”，partition 都是唯一对应到一个consumer的，也就是说如果partition 和consumer 刚好想等那就是1:1，如果 partition的数量大于consumer的数量那就会拿就会根据Kafka提供的负载均衡方法来分成分配，那就会出现多个partition对应到一个consumer ，但是不回出现一个partition被多个consumer消费的情况。这是Kafka保证消息有序的设计。
 
 <img src="assets/image-20220416195207742.png" alt="image-20220416195207742" style="zoom:50%;" />
 
 
 
-当topic 下面
+> kafka 中comsumer 负载partion 的策略有三种，通常选择粘性策略
+>
+> **Range**
+>
+> 不知道咋翻译，这个是默认的策略。大概意思就是对分区进行排序，排序越靠前的分区能够分配到更多的分区。
+>
+> 比如有3个分区，消费者A排序更靠前，所以能够分配到P0\P1两个分区，消费者B就只能分配到一个P2。
+>
+> 如果是4个分区的话，那么他们会刚好都是分配到2个。
+>
+> <img src="https://mmbiz.qpic.cn/mmbiz_jpg/ibBMVuDfkZUkGTrS4o7dp9ONqkuQQ6Kr9ZdWWibaACiaW3vgID1UwSpgkVKxRQiatEmA3moEc0hGGgjgeCSOjNYaSw/640?wx_fmt=jpeg&wxfrom=5&wx_lazy=1&wx_co=1" alt="图片" style="zoom:33%;" />
+>
+> 但是这个分配策略会有点小问题，他是根据主题进行分配，所以如果消费者组订阅了多个主题，那就有可能导致分区分配不均衡。
+>
+> 比如下图中两个主题的P0\P1都被分配给了A，这样A有4个分区，而B只有2个，如果这样的主题数量越多，那么不均衡就越严重。
+>
+> <img src="https://mmbiz.qpic.cn/mmbiz_jpg/ibBMVuDfkZUkGTrS4o7dp9ONqkuQQ6Kr9X81Cqviag3zbqyz9Agtqiacyyw71qg3QhV7ocn3bnFYD87sLiaaRmdPHQ/640?wx_fmt=jpeg&wxfrom=5&wx_lazy=1&wx_co=1" alt="图片" style="zoom:33%;" />
+>
+> **RoundRobin**
+>
+> 也就是我们常说的轮询了，这个就比较简单了，不画图你也能很容易理解。
+>
+> 这个会根据所有的主题进行轮询分配，不会出现Range那种主题越多可能导致分区分配不均衡的问题。
+>
+> P0->A，P1->B，P1->A。。。以此类推
+>
+> <img src="https://mmbiz.qpic.cn/mmbiz_jpg/ibBMVuDfkZUkGTrS4o7dp9ONqkuQQ6Kr9jzL1SstoAmIlRU2tMrtpTYaK9jYgqXqwNfyxdQuDKmQ6gPPibSdTgfQ/640?wx_fmt=jpeg&wxfrom=5&wx_lazy=1&wx_co=1" alt="图片" style="zoom:33%;" />
+>
+> **Sticky**
+>
+> 这个从字面看来意思就是粘性策略，大概是这个意思。主要考虑的是在分配均衡的前提下，让分区的分配更小的改动。
+>
+> 比如之前P0\P1分配给消费者A，那么下一次尽量还是分配给A。
+>
+> 这样的好处就是连接可以复用，要消费消息总是要和broker去连接的，如果能够保持上一次分配的分区的话，那么就不用频繁的销毁创建连接了。
 
-consumer的数量发生变化的时候会触发，partition的 rebalance , 实现的方式是:每个consumer group 在 broker 会有一个 GroupCoordinator一一对应，它是Kafka用于管理consumer group的组件，GroupCoordinator 会在zookeeper 维护consumer的元数据（有多少consumer，partition负载后的结果等）在每一次consumer加入或退出的时候，GroupCoordinator 会在完成负载均很之后修改zookeeper的信息：负载是在客户端完成的，最终由GroupCoordinator来和zookeeper交互。为什么不让每个 consumer客户端和zookeeper交互的？因为可能发生 "羊群效应" / [“脑裂问题”](https://blog.csdn.net/zxylwj/article/details/103608916) （因为consumer链接到的是不同zookeeper结点，但是这时候发生了脑裂问题。读取到的数据长时间不一致就会导致负载均衡出现问题）
+### rebalance
+
+![image-20220505132007600](assets/image-20220505132007600.png)
+
+当topic 下面consumer的数量发生变化的时候会触发，partition的 rebalance , 实现的方式是:每个consumer group 在 broker 会有一个唯一 GroupCoordinator一一对应（选举出来的），它是Kafka用于管理consumer group的组件，GroupCoordinator 会在zookeeper 维护consumer的元数据（有多少consumer，partition负载后的结果等）在每一次consumer加入或退出的时候，GroupCoordinator 会在完成负载均衡之后修改zookeeper的信息：负载是在客户端完成的，最终由GroupCoordinator来和zookeeper交互。为什么不让每个 consumer客户端和zookeeper交互的？因为可能发生 "羊群效应" / [“脑裂问题”](https://blog.csdn.net/zxylwj/article/details/103608916) （因为consumer链接到的是不同zookeeper结点，但是这时候发生了脑裂问题。读取到的数据长时间不一致就会导致负载均衡出现问题）
 
 所以使用了中心化的 GroupCoordinator 来负责处理，同时GroupCoordinator只是维护分区的负载相关信息以及同时consumer进行负载均衡分配：GroupCoordinator 会从可用的consumer中选一个做个 group leader（这个操作只会在唯一的 leader broker 上完成），然后获取当前配置的分区策略，最后将这些信息response给consumer，consumer收到消息确定自己是leader (只有是leader的consumer才能获取到所有信息)然后该consumer根据获取到的分区策略进行分区分配
 
 > 1. 每个 consumer group 在服务端只会有唯一的一个 GroupCoordinator，
+> 2. 当前 consumer 准备加入 consumer group 或 GroupCoordinator发生故障转移时，consumer 并不知道GroupCoordinator 的 host 和 port，所以 consumer 会向 Kafka 集群中的任一 broker 节点发送 FindCoordinatorRequest 请求，收到请求的 broker 节点会返回 ConsumerMetadataResponse 响应，其中就包含了负责管理该 Consumer Group 的 GroupCoordinator 的地址。
+> 2.  接下来，consumer 会连接到 GroupCoordinator 节点，并周期性的发送心跳请求。GroupCoordinator 会通过心跳消费确定 consumer 是否正常在线，长时间收不到一个心跳信息时，GroupCoordinator 会认为 consumer 宕机了，就会为该 consumer group 触发新一轮的 Rebalance 操作。一个新的consumer的加入也会触发rebalance
+> 2. 在 consumer 收到中带有 IllegalGeneration 异常的心跳响应时，就表明 GroupCoordinator 发起了 Rebalance 操作。此时 consumer 会向 GroupCoordinator 发送 JoinGroupRequest ，向 GroupCoordinator 表明自己要加入指定的Consumer Group。
+> 2. roupCoordinator 等待一个 consumer group 中全部 consumer 都发送了 JoinGroupRequest 请求之后，就会结合Zookeeper 中的 partition 的元数据，进行 partition 的分配。
+> 2.  GroupCoordinator 在分配完 partition 之后，会将 partition 与 consumer 之间的映射关系写入到 Zookeeper 中保存，同时还会将分配结果通过 JoinGroupResponse 返回给 consumer。
+> 2. consumer 根据根据 JoinGroupResponse 响应中的分配结果消费对应的 partition，同时会定时发送HeartbeatRequest 请求表明自己在线。如果后续出现 **consumer 加入或下线**、**broker 上下线**、**partition 增加等状况**时，GroupCoordinator 返回的 HeartbeatResponse 会包含 IllegalGeneration 异常，接下来就会进入步骤3。
 >
-> 2. consumer 加入一个consumer group/GroupCoordinator发生故障转移的时候，consumer 并不知道GroupCoordinator位置
-> 3. 但是consumer 会向任意broker发送Consumer Meta Request ，请求中包含了 所在的consumer group的group id, 收到请求的broker会将GroupCoordinator相关信息放入response中给到consumer
-
-接下来，所有consumer进入Synchronizing Group State阶段，所有consumer会向GroupCoordinator发送**SyncGroupRequest**，其中只有consumer leader的请求信息中包含了分区结果，GroupCoordinator会根据这个结果组建SyncGroupResponse信息给到consumer。consumer解析它即可获取到自身的分区信息。
-
-在整个rebalance的过程中，所有partition都会被回收，consumer是无法消费任何 partition的。Join阶段会等待原先组内存活的成员发送**JoinGroupRequest**过来，如果原先组内的成员因为业务处理一直没有发送请求过来，服务端就会一直等待，直到超时。
-
-为了减少因为consumer短暂不可用造成的rebalance，kafka在2.3版本中引入了Static Membership。
+> 上述方案看起来已经比较完美的了，但是有个问题是 rebalance 的策略是在 GroupCoordinator 中实现的，扩展性上多多少少有点问题，当我们要使用新 rebalance 策略时，需要修改 GroupCoordinator 
+>
+> 所以有了改进：将rebalance这个动作交给了选举出来的 consumer leader  ，Kafka 0.9版本进行了改进
+>
+> 该版本的 rebalance 协议将 JoinGroupRequest 的处理过程拆分成了两个阶段，分别是 Join Group 阶段和 Synchronizing Group State 阶段。
+>
+> 1. 当 consumer 通过 FindCoordinatorRequest 查找到其 Consumer Group 对应的 GroupCoordinator 之后，就会进入 Join Group 阶段。
+> 2. Consumer 先向 GroupCoordinator 发送 JoinGroupRequest 请求，其中包含 consumer 的相关信息
+>
+> <img src="assets/image-20220505132957991.png" alt="image-20220505132957991" style="zoom:50%;" />
+>
+> 3. GroupCoordinator 收到 JoinGroupRequest 后会暂存该 consumer 信息，然后等待全部 consumer 的 JoinGroupRequest 请求。JoinGroup Request 中的 `session.timeout.ms` 和 `rebalance_timeout_ms`（ `max.poll.interval.ms`）是就是用来告诉 GroupCoordinator 等待多久的。
+>
+> 4. GroupCoordinator 会根据全部 consumer 的 JoinGroupRequest 请求来确定 Consumer Group 中可用的 consumer，从中选取一个 consumer 成为 Group Leader，同时还会决定 partition 分配策略（这样就可以做到中心化可配置），最后会将这些信息封装成JoinGroupResponse 返回给 Group Leader Consumer
+>
+> 5. 每个 consumer 都会收到 JoinGroupResponse 响应，但是只有 Group Leader 收到的 JoinGroupResponse 响应中封装的所有 consumer 信息以及 Group Leader 信息。当其中一个 consumer 确定了自己的 Group Leader后，会根据 consumer 信息、kafka 集群元数据以及 partition 分配策略计算 partition 的分片结果。其他非 Group Leader consumer 收到 JoinResponse 为空响应，也就不会进行任何操作，只是原地等待。
+>
+>    <img src="assets/image-20220505133255406.png" alt="image-20220505133255406" style="zoom:50%;" />
+>
+> 6. 接下来，所有 consumer 进入 Synchronizing Group State 阶段，所有 consumer 会向 GroupCoordinator 发送 SyncGroupRequest。其中，Group Leader Consumer 的 SyncGroupRequest 请求包含了 partition 分配结果，普通 consumer 的 SyncGroupRequest 为空请求。
+>
+>    <img src="assets/image-20220505133405327.png" alt="image-20220505133405327" style="zoom:50%;" />
+>
+> 7. GroupCoordinator 接下来会将 partition 分配结果封装成 SyncGroupResponse 返回给所有 consumer。
+>
+>    <img src="assets/image-20220505133450087.png" alt="image-20220505133450087" style="zoom:50%;" />
+>
+>  8. consumer 收到 SyncGroupResponse 后进行解析，就可以明确 partition 与 consumer 的映射关系。当然，后续 consumer 还是会与 GroupCoordinator 保持定期的心跳。触发 rebalance 的条件也是心跳响应中包含 IllegalGeneration 异常。
+>
+>     <img src="assets/image-20220505133547423.png" alt="image-20220505133547423" style="zoom:50%;" />
+>
+> 但是这次改造还是又问题，因为在rebalance 的过程中，消费者们这时候不能消费任何 partition（这也是为什么在触发rebalance后消费变慢的原因）
+>
+> 为了解决上述问题，kafka 在 2.3 版本中引入了 Static Membership 协议来减少rebalance的发生
+>
+> - 在 consumer 端增加 `group.instance.id` 配置（`group.instance.id` 是 consumer 的唯一标识）。如果 consumer 启动的时候明确指定了 `group.instance.id` 配置值，consumer 会在 JoinGroup Request 中携带该值，表示该 consumer 为 static member。 为了保证 `group.instance.id` 的唯一性，我们可以考虑使用 hostname、ip 等。
+> - 在 GroupCoordinator 端会记录 group.instance.id → member.id 的映射关系，以及已有的 partition 分配关系。当 GroupCoordinator 收到已知 group.instance.id 的 consumer 的 JoinGroup Request 时，不会进行 rebalance，而是将其原来对应的 partition 分配给它。
+>
+> Static Membership 协议可以让 consumer group 只在下面的 4 种情况下进行 rebalance：
+>
+> - 有新 consumer 加入 consumer group 时。
+> - Group Leader 重新加入 Group 时。
+> - consumer 下线时间超过阈值（ `session.timeout.ms`），也就是说在consumer下线时间没有超过阈值的时候，那部分partition会暂时没有消费者消费
+> - GroupCoordinator 收到 static member 的 LeaveGroup Request 时。
+>
+> 这样的话，在使用 Static Membership 协议的场景下，只要在 consumer 重新部署的时候，不发送 LeaveGroup Request 且在 `session.timeout.ms` 时长内重启成功，就不会触发 rebalance。
+>
+> 在 kafka 2.4 版本中，为了进一步减少 rebalance 带来的 `Stop The World`，提出了 `Incremental Cooperative Rebalance(增量合作再平衡)` 协议。其核心思想就是使用将一次全局的 rebalance，改成多次小规模 rebalance，最终收敛到 rebalance 的状态。该协议是：
+>
+> - consumer 比较新旧两个 partition 分配结果，只停止消费被回收的 partition，对于两次都分配给自己的 partition，consumer 根本没有必要停止消费，这也就解决了 `Stop The World` 的问题。
+>
+> - 通过多轮的局部 rebalance 来最终实现全局的 rebalance。下面会通过示例说明每轮 rebalance 都做了什么。
+>
+>   <img src="assets/image-20220505134506281.png" alt="image-20220505134506281" style="zoom:40%;" />
+>
+>   上图就展示了一个 consumer 在一次 rebalance 中比较操作： `owned partitions`和 `assigned partitions` 分别是该 consumer 在 rebalance 前后要处理的 partition 集合，其中，consumer 在整个 rebalance 过程中无需停止对 `unchanged partitions` 集合中 partition 的消费。
+>
+> 介绍完 Incremental Cooperative Rebalance 协议的核心思想之后，我们通过示例来说明 Incremental Cooperative Rebalance 协议的工作原理。
+>
+> 
 
 然后 kafka 2.4 版本中 新增了 Incremental Cooperative Rebalance 协议 
 
-详情：https://cloud.tencent.com/developer/article/1821020
+详情：https://cloud.tencent.com/developer/article/1832883
 
 > GroupCoordinator 中还维护了分区和consumer group 的消费关系。记录了consumer消费的offset （cunsumer 一次poll() 消费之后需要提交数据给到 GroupCoordinator ）
 
@@ -129,7 +226,7 @@ consumer的数量发生变化的时候会触发，partition的 rebalance , 实�
 kafka 默认提供了有两种 retention policy：
 
 1. 根据 message 保留的时间进行清理的策略，其具体含义是：当一条 message 在 kafka 集群中保存的时间超过了指定阈值，就可以被后台线程清理掉
-2. 根据 topic 占用磁盘大小进行清理的策略，其具体含义是：当 topic 的 log 小大于一个阈值之后，则可以开始由后台线程删除最旧的 message。
+2. 根据 topic 占用磁盘大小进行清理的策略，其具体含义是：当 topic 的 log 大小大于一个阈值之后，则可以开始由后台线程删除最旧的 message。
 
 kafka 的 retention policy 可以针对全部 topic 进行配置，还可以针对某个 topic 进行特殊的配置。 
 
@@ -143,11 +240,39 @@ kafka 会启动一个后台压缩线程，定期将 key 相同的 message 进行
 
 # Kafka 的可靠性保障
 
+## 发送端
+
+消息发送的时候可以采取
+
+1. 发送并忘记，直接调用发送send方法，不管结果，虽然可以开启自动重试，但是肯定会有消息丢失的可能
+2. 同步发送，同步发送返回Future对象，我们可以知道发送结果，然后进行处理
+3. 异步发送，发送消息，同时指定一个回调函数，根据结果进行相应的处理
+
+## 服务端
+
 acks 参数配置：
 
 1. 0：producer 不等待 broker 的 ack，这一操作提供了一个最低的延迟，broker 一接收到还没有写入磁盘就已经返回，当 broker 故障时有可能丢失数据；
 2. 1：producer 等待 broker 的 ack，partition 的 leader 落盘成功后返回 ack，不管follower是否同步成功。如果在 follower 同步成功之前 leader 故障，那么将会丢失数据
 3. -1（all）：producer 等待 broker 的 ack，partition 的 leader 和 follower （ISRL里的follower，不是全部的follower）全部落盘成功后才 返回 ack。但是如果在 follower 同步完成后，broker 发送 ack 之前，leader 发生故障，那么会造成数据重复 （这个功能需要partition具有多副本，如果只有一台机器，其实和1是一样的）
+
+page cache 写入，因为通常是不会采用同步刷盘的，所以存在丢失的风险（**存在副本的情况下不可能都丢，所以我们通常需要最少2个副本，并且最好部署在不同的物理机上**），其实就算采用同步刷盘也有丢失风险，因为page cache 刷的数据是写到硬盘的一个自带的缓冲区中，并不是说直接刷到硬盘中
+
+**采用ISR ack 策略，同时配置至少写入到一个副本才算成功**
+
+## 消费端
+
+消费者丢失的可能就比较简单，关闭自动提交位移即可，改为业务处理成功手动提交。
+
+因为重平衡发生的时候，消费者会去读取上一次提交的偏移量，自动提交默认是每5秒一次，这会导致重复消费或者丢失消息。
+
+`enable.auto.commit=false`，设置为手动提交。
+
+还有一个参数我们可能也需要考虑进去的：
+
+`auto.offset.reset=earliest`，这个参数代表没有偏移量可以提交或者broker上不存在偏移量的时候，消费者如何处理。`earliest`代表从分区的开始位置读取，可能会重复读取消息，但是不会丢失，消费方一般我们肯定要自己保证幂等，另外一种`latest`表示从分区末尾读取，那就会有概率丢失消息。
+
+综合这几个参数设置，我们就能保证消息不会丢失，保证了可靠性。
 
 # 压缩
 

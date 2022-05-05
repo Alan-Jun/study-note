@@ -264,7 +264,7 @@ ypp@passport-service-75798d88f6-8h252:/data$ jmap -finalizerinfo 1
 Attaching to process ID 1, please wait...
 Debugger attached successfully.
 Server compiler detected.
-JVM version is 25.232-b09
+JVM version is 25.232		-b09
 Number of objects pending for finalization: 0
 ```
 
