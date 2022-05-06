@@ -1,6 +1,72 @@
-## Apache RocketMQ开发者指南
+# Apache RocketMQ开发者指南
 
 文章来自 GitHub https://github.com/apache/rocketmq/tree/master/docs/cn
+
+# 实际使用
+
+## 生产者
+
+* 同步发送：可以通过result 来判读消息是否发送成功
+* 异步发送：通过callback 来判断是否发送成功
+* 指定selector : 指定选择分区的规则（顺序消息场景会使用到）
+
+## 消费者
+
+消费的时候核心配置
+
+https://wenku.baidu.com/view/05ea2526b62acfc789eb172ded630b1c59ee9b05.html
+
+## 顺序消息
+
+producer 默认是轮训queue 发送消息，这样就无法保证顺序性，如果需要保证顺序性，我们需要在发送的时候自定义sharding key 的负载均衡方式：
+
+1. 获取hash code 取余保证相同hash code 的分配到相同的queue （当然还可以采用一致性hash等方式）
+2. 采用顺序发送模式，失败是不会重选其他queue重发的，
+
+我们知道 consumer 端的rebalance 和kafka 类似，我们 queue  和 partition 是类似的，一个queue只会对应到一个consumer， cousumer client 获取到消息之后，也会对顺序消息进行处理，将其放到内存中的桶一个队列中，保证我们消费一定是有序的，但是还是有一个问题如果消费失败怎么办，在rocketMq的consumer client 使用了延缓消费策略处理 https://blog.csdn.net/qq_15045645/article/details/119329746 
+
+**demo** : https://wenku.baidu.com/view/e5888fac6b0203d8ce2f0066f5335a8102d266c5.html
+
+使用spring boot 整合 rocket 在使用中我们能通常使用@RocketMQMessageListener 注解
+
+```java
+@Target({ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Component
+public @interface RocketMQMessageListener {
+    String NAME_SERVER_PLACEHOLDER = "${rocketmq.name-server:}";
+
+    String consumerGroup() default "";
+
+    String topic();
+		/**
+		 * selectorType 消息选择器类型
+		 * 默认是根据 tag 过滤 
+		 */
+    SelectorType selectorType() default SelectorType.TAG;
+		/**
+     * 如果说 selectorType 是选择使用什么过滤器，那么 selectorExpression 就是指定实际的过滤值			* 的
+     */
+    String selectorExpression() default "*";
+		// 指定消费模式 普通消费和顺序消费
+    ConsumeMode consumeMode() default ConsumeMode.CONCURRENTLY;
+		// 指定是广播模式还是集群模式
+    MessageModel messageModel() default MessageModel.CLUSTERING;
+		// 消费的最大线程数，在顺序消费的时候，一个queue只会与一个线程去消费
+    int consumeThreadMax() default 64;
+		// 一条消息最长的消费时间如果超过就认为消费失败了 默认30s
+    long consumeTimeout() default 30000L; 
+
+    String nameServer() default "${rocketmq.name-server:}";
+}
+```
+
+顺序消息使用中会带来的一些问题：
+
+1. 无法使用到 Failover（故障转移）特性， 发送失败无法选取新的可用queue 
+2. 因为发送的路由策略导致的热点问题，可能某一些MessageQueue的数据量特别大，因为某些用户的数据是热点数据，所以会导致负载不均衡，**解决方法可以看看是否可以对在增加一些字段来作为分区的计算基准，让热点用户的数据能够更均衡的分布**
+3. 消费失败时无法跳过：**解决方案，可以在业务处理的时候做设计，让有顺序的业务消费操作的时候检查上一步操作是否成功，如果成功才能处理，否则处理失败，这样可以保证某一批顺序的消息中间有失败的了时候，后续的消费都会失败，这样就可以做失败跳过的策略，然后将这类消息到重试队列中，让他们再次按照顺序被重试消费掉**
 
 # 概念和特性
 
