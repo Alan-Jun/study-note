@@ -21,13 +21,13 @@ Apache Kafka 是一种分布式的，基于发布/订阅的消息系统，由Sca
 
 * 作为应用系统的消息中间件，实现消息的订阅/发布（解耦合）
 * Kafka 也可用作系统总线，将其接入多个子系统，子系统会将产生的数据发送到Kafka，之后流转到墓地系统中
-* Kafka还可以作为日志手机中心，多个系统产生的日志统一收集到Kafka中，然后由数据分析平台进行统一处理，日志会被Kafka持久化道磁盘，所以同时支持实时和离线数据处理
+* Kafka还可以作为日志收集中心，多个系统产生的日志统一收集到Kafka中，然后由数据分析平台进行统一处理，日志会被Kafka持久化道磁盘，所以同时支持实时和离线数据处理
 
 # Kafka中的一些核心概念
 
 ## 消息
 
-消息是Kafka中最基本的数据单元，消息由一串子节住组成，主要是由key和value构成，key和value都是byte 数组，key 主要用于路由选择partition， 比如我们要使用顺序消息特性的时候，就需要对这个key做特殊处理，同一个key 的消息就会落到相同的partition中，就保证了消息的顺序。为了提高网络利用率，Kafka的生产者的消息是批量发送到broker的，并且会在发送之前对消息进行压缩
+消息是Kafka中最基本的数据单元，消息由一串子节组成，主要是由key和value构成，key和value都是byte 数组，key 主要用于路由选择partition， 比如我们要使用顺序消息特性的时候，就需要对这个key做特殊处理，同一个key 的消息就会落到相同的partition中，就保证了消息的顺序。为了提高网络利用率，Kafka的生产者的消息是批量发送到broker的，并且会在发送之前对消息进行压缩
 
 message 的默认大小限制是：1M
 相关参数可以看Kafka的文档 https://kafka.apache.org/documentation/#brokerconfigs
@@ -40,7 +40,7 @@ topic可以被分成多个partition（每个topic至少有一个partition），�
 
 > Ps : partition 的选择是在 provider 发送端做的，发送端的clinet 中维护了服务端的源信息（topic -> partition (leader  , follower）以及他们对应的ip,port..... 等信息,在发送消息的时候会
 
-partition是Kafka水平扩展的基础，我们可以通过增加服务器（broker）并且在上面分配partition增加Kafka的并行处理能力
+**partition是Kafka水平扩展的基础，我们可以通过增加服务器（broker）并且在上面分配partition增加Kafka的并行处理能力**
 
 partition在逻辑上对应了一个log，当生产者的消息写入到Kafka的partition的时候，实际上是写入到了partition对应的log中，log是一个逻辑概念，对应到磁盘上的一个文件夹，log由多个segment组成：每个segment对应了一个索引文件（稀疏索引），为了避免出现超大文件，每个日志文件的大小是有限制的(1G )，当超过限制后会创建新的segment，Kafka采用的是顺序I/O，所以只会向最新的segment追加数据，这样可以很好的利用操作系统的[page cache](https://zhuanlan.zhihu.com/p/68071761) 能力，[加速磁盘的读写从而避免的读写磁盘导致的性能瓶颈](https://blog.csdn.net/qian_348840260/article/details/108830550).
 
@@ -48,7 +48,7 @@ partition在逻辑上对应了一个log，当生产者的消息写入到Kafka的
 >
 > ps: page cache 中的一个页的大小一般是4k/8k
 
-消息在broker 端 也会涉及到消息压缩，目前支持的压缩方式有
+消息在broker 端也会涉及到消息压缩，目前支持的压缩方式有
 
 zstd, lz4, snappy, gzip，不过配置的话是可以配置：
 
@@ -56,9 +56,9 @@ zstd, lz4, snappy, gzip，不过配置的话是可以配置：
 
 #### partition leader 崩溃恢复
 
-崩溃broker（controler）会重新ISR集合中选取leader https://blog.csdn.net/pengweismile/article/details/118072015
+崩溃broker（controler）会重新在ISR集合中选取leader https://blog.csdn.net/pengweismile/article/details/118072015
 
-具体的做法是，Kafka在zk 有一个brokers的 Znode controller 会watch这个节点的变化，broker 在其中创建的都是临时节点，一旦断开心跳节点消失，watch 会通知到controler ，然后controller 会查到该挂掉的broker中有哪些partition是leader，然后会对这些partition做leader的重新选举，选举的方式很简单，直接在ISR集合中找一个可用的节点即可，ISR集合中的节点维护的都是Kafka承诺可靠并commit的消息，在崩溃中丢失的非HW的消息会在client中通过callback获取到发送失败的消息，同样的HW后的数据对consumer也是不可见的
+具体的做法是，Kafka在zk 有一个brokers的 Znode controller 会watch这个节点的变化，broker 在其中创建的都是临时节点，一旦断开心跳节点消失，watch 会通知到controler ，然后controller 会查到该挂掉的broker中有哪些partition是leader，然后会对这些partition做leader的重新选举，选举的方式很简单，直接在ISR集合（这个集合的数据变动也是有元数据做管理的）中找一个可用的节点即可，ISR集合中的节点维护的都是Kafka承诺可靠并commit的消息，在崩溃中丢失的非HW的消息会在client中通过callback获取到发送失败的消息，同样的HW后的数据对consumer也是不可见的
 
 > ISR 同步是默认使用的同步方式
 
@@ -79,6 +79,22 @@ zstd, lz4, snappy, gzip，不过配置的话是可以配置：
 根据下文consumer group 中提到的 topic 的partition 和 consumer消费的关系，如果我们要在保证顺序性的条件下，充分利用机器资源，可以使用线程池，每一个线程单独做一个 consumer ，这样可以利用到单机的多核资源；
 
 如果没有顺序要求，还可以设置成单机多consumer 多消费线程的两个线程池的模型
+
+
+
+**顺序消费**中我们遇到消费某一条消息失败问题怎么处理，保证我们的消费性能不会被影响，然后导致消息积压或者实时性降低问题？
+
+我这边的一种方式是，对于有顺序的消费场景，可以让这个顺序场景的几个消息的处理有序，比如一阶段落数据1，二阶段处理的时候查询一阶段有没有完成，如果没有完成就直接失败，同理如果第三阶段
+
+这样处理失败的阶段直接重新发回kafka，让后续重试，这样可以不阻碍流程，
+
+其次还可以采取在内存中新建一个队列对这类数据先做重试处理，多次重试（一般2-3次）失败就直接告警，人工介入。处理这类数据。这里会遇到一个问题队列大小是多大，队列满了数据怎么处理的问题，这个问题处理可以直接丢到kafka中，因为我们的partition是直接和相同的consumer绑定的可以继续保证顺序
+
+但是这会遇到一个问题那就是：内存是在机器出问题的时候会丢失的，可以怎么做呢？在放入队列前写一条日志，操作成功再写一条日志，机器down机我们是可以感知到的，到时候通过日志去对丢失的数据做恢复即可
+
+
+
+**非顺序消费**其实也类似，不过非顺序消费场景性能可以做到更快，因为可以异步多线程去消费多个消息。最后做一次offset的提交，这会遇到的问题是什么呢？比如你消费100条在多线程中处理。中间有失败的怎么处理呢？可以采用刚才顺序消费中的方式，我们在增加一个线程池，处理失败的丢入这个线程池，让他们在里面做重试，同理需要落log,防止内存丢失问题，线程池如果满了就丢会Kafka。让offset能够顺利提交，然后不影响消费能力
 
 
 
