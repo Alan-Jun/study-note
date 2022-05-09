@@ -23,7 +23,7 @@ producer 默认是轮训queue 发送消息，这样就无法保证顺序性，�
 1. 获取hash code 取余保证相同hash code 的分配到相同的queue （当然还可以采用一致性hash等方式）
 2. 采用顺序发送模式，失败是不会重选其他queue重发的，
 
-我们知道 consumer 端的rebalance 和kafka 类似，我们 queue  和 partition 是类似的，一个queue只会对应到一个consumer， cousumer client 获取到消息之后，也会对顺序消息进行处理，将其放到内存中的桶一个队列中，保证我们消费一定是有序的，但是还是有一个问题如果消费失败怎么办，在rocketMq的consumer client 使用了延缓消费策略处理 https://blog.csdn.net/qq_15045645/article/details/119329746 
+我们知道 consumer 端的rebalance 和kafka 类似，我们 queue  和 partition 是类似的，一个queue只会对应到一个consumer， cousumer client 获取到消息之后，也会对顺序消息进行处理，将其放到内存中的一个队列中，保证我们消费一定是有序的，但是还是有一个问题如果消费失败怎么办，在rocketMq的consumer client 使用了延缓消费策略处理 https://blog.csdn.net/qq_15045645/article/details/119329746 
 
 **demo** : https://wenku.baidu.com/view/e5888fac6b0203d8ce2f0066f5335a8102d266c5.html
 
@@ -65,8 +65,12 @@ public @interface RocketMQMessageListener {
 顺序消息使用中会带来的一些问题：
 
 1. 无法使用到 Failover（故障转移）特性， 发送失败无法选取新的可用queue 
+
 2. 因为发送的路由策略导致的热点问题，可能某一些MessageQueue的数据量特别大，因为某些用户的数据是热点数据，所以会导致负载不均衡，**解决方法可以看看是否可以对在增加一些字段来作为分区的计算基准，让热点用户的数据能够更均衡的分布**
+
 3. 消费失败时无法跳过：**解决方案，可以在业务处理的时候做设计，让有顺序的业务消费操作的时候检查上一步操作是否成功，如果成功才能处理，否则处理失败，这样可以保证某一批顺序的消息中间有失败的了时候，后续的消费都会失败，这样就可以做失败跳过的策略，然后将这类消息到重试队列中，让他们再次按照顺序被重试消费掉**
+
+   这块可以看我写的[kafka的文章中的怎么做顺序消息的消费，同时避免性能下降](Kafka.md) consumer 一节中的讲解顺序消费和非顺序消费的处理问题
 
 # 概念和特性
 

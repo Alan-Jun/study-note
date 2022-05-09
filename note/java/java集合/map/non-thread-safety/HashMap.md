@@ -231,9 +231,13 @@ static int indexFor(int h, int length) {
 
 ### 1.5. 扩容-基本原理
 
+#### 扩容条件
+
 设 HashMap 的 table 长度为 M，需要存储的键值对数量为 N，如果哈希函数满足均匀性的要求，那么每条链表的长度大约为 N/M，因此查找的复杂度为 O(N/M)。
 
 为了让查找的成本降低，应该使 N/M 尽可能小，因此需要保证 M 尽可能大，也就是说 table 要尽可能大。HashMap 采用动态扩容来根据当前的 N 值来调整 M 值，使得空间效率和时间效率都能得到保证。
+
+**当存储的数据的size > 负载因子指定的数量的时候就回触发扩容**
 
 和扩容相关的参数主要有：capacity、size、threshold 和 load_factor。
 
@@ -243,6 +247,8 @@ static int indexFor(int h, int length) {
 | size       | 键值对数量。                                                 |
 | threshold  | size 的临界值，当 size 大于等于 threshold 就必须进行扩容操作。 |
 | loadFactor | 装载因子，table 能够使用的比例，threshold = (int)(capacity* loadFactor)。 |
+
+#### 扩容过程
 
 ```java
 static final int DEFAULT_INITIAL_CAPACITY = 16;

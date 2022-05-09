@@ -11,7 +11,7 @@
 
 Apache Kafka 是一种分布式的，基于发布/订阅的消息系统，由Scala编写而成的，它具备快速，可扩展，可持久化的特点，Kafka有着下面这些特性，让其受到越来越到的开发人员的青睐
 
-* 近乎实时性的消息处理能力。即使面对海量消息也能高效的存储以及查询消息（后面会解释是怎么设计实现的），Kakfka 将消息包存在磁盘中，在其设计中并不惧怕磁盘操作。他会以顺序读写的方式访问池磁盘（可以利用到操作系统的Page cache 功能加速磁盘的读写）从而避免的读写磁盘导致的性能瓶颈
+* 近乎实时性的消息处理能力。即使面对海量消息也能高效的存储以及查询消息（后面会解释是怎么设计实现的），Kakfka 将消息包存在磁盘中，在其设计中并不惧怕磁盘操作。他会以顺序读写的方式访问持久化到磁盘（可以利用到操作系统的Page cache 功能加速磁盘的读写）从而避免的读写磁盘导致的性能瓶颈
 * Kafka 支持批量的读写消息，并且会对消息进行批量压缩，提高了网络利用率
 * Kafka支持分区（partition）消息，保证分区中的消息是有序的，而分区之间可以并发操作，这样提高了Kafka的并发能力
 * 并且分区（partition）是支持在线水平扩展的
@@ -22,12 +22,13 @@ Apache Kafka 是一种分布式的，基于发布/订阅的消息系统，由Sca
 * 作为应用系统的消息中间件，实现消息的订阅/发布（解耦合）
 * Kafka 也可用作系统总线，将其接入多个子系统，子系统会将产生的数据发送到Kafka，之后流转到墓地系统中
 * Kafka还可以作为日志收集中心，多个系统产生的日志统一收集到Kafka中，然后由数据分析平台进行统一处理，日志会被Kafka持久化道磁盘，所以同时支持实时和离线数据处理
+* 持久化中心，只要保证及时消费即可
 
 # Kafka中的一些核心概念
 
 ## 消息
 
-消息是Kafka中最基本的数据单元，消息由一串子节组成，主要是由key和value构成，key和value都是byte 数组，key 主要用于路由选择partition， 比如我们要使用顺序消息特性的时候，就需要对这个key做特殊处理，同一个key 的消息就会落到相同的partition中，就保证了消息的顺序。为了提高网络利用率，Kafka的生产者的消息是批量发送到broker的，并且会在发送之前对消息进行压缩
+消息是Kafka中最基本的数据单元，消息由一串字节组成，主要是由key和value构成，key和value都是byte 数组，key 主要用于路由选择partition， 比如我们要使用顺序消息特性的时候，就需要对这个key做特殊处理，同一个key 的消息就会落到相同的partition中，就保证了消息的顺序。为了提高网络利用率，Kafka的生产者的消息是批量发送到broker的，并且会在发送之前对消息进行压缩
 
 message 的默认大小限制是：1M
 相关参数可以看Kafka的文档 https://kafka.apache.org/documentation/#brokerconfigs
@@ -36,7 +37,7 @@ message 的默认大小限制是：1M
 
 topic 是用于存储消息的逻辑概念，可以看作一个消息集合，每个topic可以有多个生产者向其中push消息，也可以有任意多个消费者消费其中的消息。
 
-topic可以被分成多个partition（每个topic至少有一个partition），同一个topic下面的不同partition的消息是不同的，每个消息被添加到partition中都会分配到一个offset，Kafka也通过offset保证消息的顺序性，offset的顺序性不垮分区，所以Kafka只保证同一个partition中的 消息是有序的(
+topic可以被分成多个partition（每个topic至少有一个partition），同一个topic下面的不同partition的消息是不同的，每个消息被添加到partition中都会分配到一个offset，Kafka也通过offset保证消息的顺序性，offset的顺序性不垮分区，所以Kafka只保证同一个partition中的 消息是有序的
 
 > Ps : partition 的选择是在 provider 发送端做的，发送端的clinet 中维护了服务端的源信息（topic -> partition (leader  , follower）以及他们对应的ip,port..... 等信息,在发送消息的时候会
 
@@ -74,6 +75,12 @@ zstd, lz4, snappy, gzip，不过配置的话是可以配置：
 
 生产者的消息发送处理是批量发送之外，还进行的数据压缩，目前支持 gzip,snappy,lz4
 
+partition的 sharding  也是在发送端控制的，如果有顺序性的要求需要指定sharding策略
+
+### 发送顺序消息的时候怎么保证sharding 尽量均匀
+
+我们知道如果我们简单的使用类似 订单id来做分区控制，还是可以的，但是有的场景如果我们使用的是用户id,这个就回存在热点问题，有的用户炒作频繁，如果这些用户的数据简单的通过uid取分区就回导致某一些分区的数据量要大很多，怎么解决呢？在分区的时候增加一些新的业务字段作为条件参与分区的选择
+
 ## consumer
 
 根据下文consumer group 中提到的 topic 的partition 和 consumer消费的关系，如果我们要在保证顺序性的条件下，充分利用机器资源，可以使用线程池，每一个线程单独做一个 consumer ，这样可以利用到单机的多核资源；
@@ -82,7 +89,9 @@ zstd, lz4, snappy, gzip，不过配置的话是可以配置：
 
 
 
-**顺序消费**中我们遇到消费某一条消息失败问题怎么处理，保证我们的消费性能不会被影响，然后导致消息积压或者实时性降低问题？
+### **顺序消费怎么保证性能的前提去处理消费失败问题**
+
+顺序消费中我们遇到消费某一条消息失败问题怎么处理，保证我们的消费性能不会被影响，然后导致消息积压或者实时性降低问题？
 
 我这边的一种方式是，对于有顺序的消费场景，可以让这个顺序场景的几个消息的处理有序，比如一阶段落数据1，二阶段处理的时候查询一阶段有没有完成，如果没有完成就直接失败，同理如果第三阶段
 
@@ -90,11 +99,15 @@ zstd, lz4, snappy, gzip，不过配置的话是可以配置：
 
 其次还可以采取在内存中新建一个队列对这类数据先做重试处理，多次重试（一般2-3次）失败就直接告警，人工介入。处理这类数据。这里会遇到一个问题队列大小是多大，队列满了数据怎么处理的问题，这个问题处理可以直接丢到kafka中，因为我们的partition是直接和相同的consumer绑定的可以继续保证顺序
 
-但是这会遇到一个问题那就是：内存是在机器出问题的时候会丢失的，可以怎么做呢？在放入队列前写一条日志，操作成功再写一条日志，机器down机我们是可以感知到的，到时候通过日志去对丢失的数据做恢复即可
+但是这会遇到一个问题那就是：内存是在机器出问题的时候会丢失的，可以怎么做呢？在放入内存队列前写一条日志，操作成功再写一条日志，机器down机我们是可以感知到的，到时候通过日志去对丢失的数据做恢复即可
 
-
+### 非顺序消费怎么保证性能的前提去处理消费失败问题
 
 **非顺序消费**其实也类似，不过非顺序消费场景性能可以做到更快，因为可以异步多线程去消费多个消息。最后做一次offset的提交，这会遇到的问题是什么呢？比如你消费100条在多线程中处理。中间有失败的怎么处理呢？可以采用刚才顺序消费中的方式，我们在增加一个线程池，处理失败的丢入这个线程池，让他们在里面做重试，同理需要落log,防止内存丢失问题，线程池如果满了就丢会Kafka。让offset能够顺利提交，然后不影响消费能力
+
+
+
+**如果业务允许消息丢失，那么就不需要采取先落日志的策略，同时broker端也不必采取 ISR的ack可靠性策略**
 
 
 
@@ -104,7 +117,7 @@ https://blog.csdn.net/weixin_42131628/article/details/113580928
 
 ## Consumer group
 
-kafka 中多个consumer可以组成一个 consumer group ，一个consumer只能属于一个consumer group；同一个下的消息只会被 相同的 consumer group 下一个consumer 消费；不同consumer group间互不干扰，意味着如果希望实现“广播”消费，可以将每一个consumer放入一个独立的consumer group
+kafka 中多个consumer可以组成一个 consumer group ，一个consumer只能属于一个consumer group；同一个partition下的消息只会被相同的 consumer group 下的一个consumer 消费；不同consumer group间互不干扰，意味着如果希望实现“广播”消费，可以将每一个consumer放入一个独立的consumer group
 
 consumer group 除了提供了 “独占”和“广播”模式的消息处理之外，它还可以实现消费者的水平扩展和故障转移
 
@@ -226,6 +239,8 @@ topic中的 partition 不管是”独占“还是“广播”，partition 都是
 > 介绍完 Incremental Cooperative Rebalance 协议的核心思想之后，我们通过示例来说明 Incremental Cooperative Rebalance 协议的工作原理。
 >
 > 
+>
+> 
 
 然后 kafka 2.4 版本中 新增了 Incremental Cooperative Rebalance 协议 
 
@@ -280,12 +295,12 @@ page cache 写入，因为通常是不会采用同步刷盘的，所以存在丢
 
 消费者丢失的可能就比较简单，关闭自动提交位移即可，改为业务处理成功手动提交。
 
-因为重平衡发生的时候，消费者会去读取上一次提交的偏移量，自动提交默认是每5秒一次，这会导致重复消费或者丢失消息。
+因为重平衡发生的时候，消费者会去读取上一次提交的偏移量，自动提交默认是每5秒一次，这会导致重复消费。
 
-`enable.auto.commit=false`，设置为手动提交。还没有提交前。机器挂了也可能导致问题
+`enable.auto.commit=false`，设置为手动提交。还没有提交前。机器挂了也可能重复消费，但是不会丢失消息，其中有两种提交方式
 
-* 同步提交：会导致消费性能下降
-* 异步提交：不保证一定提交
+* 同步提交：可靠性提升，缺点会导致消费性能下降
+* 异步提交：不保证一定提交，问题也不大，最多就是重复消费消息的问题
 
 还有一个参数我们可能也需要考虑进去的：
 
@@ -367,7 +382,7 @@ IO线程模型：Reactor 主从多线程的模式
 | socket.send.buffer.bytes    | SocketServer的 SO_SNDBUF 缓冲区。如果值为 -1，将使用操作系统默认值。 | 102400 (100 kibibytes)        |
 | socket.receive.buffer.bytes | SocketServer sockets 的SO_RCVBUF 缓冲区，如果值为 -1，将使用操作系统默认值 | 102400 (100 kibibytes)        |
 
-Processor 线程类（ 也就是我们的 subReactor）：这是处理单个TCP 连接上所有请求的处理线程。每个Acceptor 实例创建若干个（num.network.threads）Processor 线程。Processor 线程负责将接收到的 SocketChannel(SocketChannel通道用于传输数据。), 注册读写事件,当数据传送过来的时候,会立即读取Request数据,通过解析之后, 然后将其添加到 RequestChannel 的 requestQueue 队列上，同时还负责将 Response 返还给 Request 发送方。
+Processor 线程类（ 也就是我们的 subReactor）：这是处理单个TCP 连接上所有请求的处理线程。每个Acceptor 实例创建若干个（num.network.threads）Processor 线程。Processor 线程负责将接收到的 SocketChannel(SocketChannel通道用于传输数据。), 注册读写事件,当数据传送过来的时候,会立即读取Request数据,通过解析之后, 然后将其添加到 RequestChannel 的 requestQueue 队列上，同时还负责将 Response 返还给 Request 发送方。然后工作线程池会去 requestQueue 中取任务执行
 
 Kafka会采用简单的负载均衡方式找到注册连接数最少的selector，让不同的连接在不同的selector上面注册I/0事件 
 
@@ -422,3 +437,8 @@ Kafka会采用简单的负载均衡方式找到注册连接数最少的selector�
 
 https://blog.csdn.net/shockang/article/details/116424217
 
+# Kafka 的日志断如何读写的
+
+https://mp.weixin.qq.com/s/68XX9qnEvDTCOw8gYLNBxQ
+
+实际的**通过索引**查找消息过程是先通过offset找到索引所在的文件，然后在稀疏索引**通过二分法**找到离目标最近的索引offset，再顺序遍历消息文件找到目标文件。这波操作时间复杂度为`O(log2n)+O(m)`,n是索引文件里索引的个数，m为稀疏程度。
