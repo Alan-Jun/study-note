@@ -42,7 +42,7 @@
     }
 
     Obj getObj(Obj obj) {
-      return node.get(obj.hashCode());java
+      return node.get(obj.hashCode());
     }
 
     @Override
