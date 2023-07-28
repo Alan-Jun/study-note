@@ -1975,11 +1975,15 @@ ZRANGEBYLEX 返回指定成员区间内的成员，**按成员字典正序排序
 
 ## HyperLogLog
 
-
+https://mp.weixin.qq.com/s/9dtGe3d_mbbxW5FpVPDNow
 
 ## 事务
 
+https://www.runoob.com/redis/redis-transactions.html
+
 ## 发布订阅
+
+https://www.runoob.com/redis/redis-pub-sub.html
 
 ## lua 脚本
 

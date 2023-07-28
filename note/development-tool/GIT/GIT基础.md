@@ -12,13 +12,16 @@
 
 ### 1.1.1 查看用户信息
 
-* `git config --global user.name` :    //获取当前登录的用户
-* `git config --global user.email` :   //获取当前登录用户的邮箱
+* `git config --global user.name` :    //获取 user name的全局配置
+* `git config --global user.email` :   //获取 user emial 的全局配置
+* `git config user.email` :   //获取 user emial 的当前包的配置
+* ....
 
 ### 1.1.2 设置/登录用户
 
-* `git config --global user.name` 'uesename' :    //获取当前登录的用户
-* `git config --global user.email`'email' :   //获取当前登录用户的邮箱
+* `git config --global user.name` 'uesename' :    //设置全局 user.name
+* `git config --global user.email`'email' :   //设置全局 user.emial
+* `git config user.email`'email' :   //设置当前包的 user.emial
 
 ## 1.2 查看所有配置信息
 

@@ -37,9 +37,9 @@ message 的默认大小限制是：1M
 
 topic 是用于存储消息的逻辑概念，可以看作一个消息集合，每个topic可以有多个生产者向其中push消息，也可以有任意多个消费者消费其中的消息。
 
-topic可以被分成多个partition（每个topic至少有一个partition），同一个topic下面的不同partition的消息是不同的，每个消息被添加到partition中都会分配到一个offset，Kafka也通过offset保证消息的顺序性，offset的顺序性不垮分区，所以Kafka只保证同一个partition中的 消息是有序的
+topic可以被分成多个partition（每个topic至少有一个partition），同一个topic下面的不同partition的消息是不同的，每个消息被添加到partition中: 消息在被追加到分区日志文件的时候都会分配一个特定的偏移量(offset)，Kafka也通过offset保证消息的顺序性，offset的顺序性不垮分区，所以Kafka只保证同一个partition中的 消息是有序的
 
-> Ps : partition 的选择是在 provider 发送端做的，发送端的clinet 中维护了服务端的源信息（topic -> partition (leader  , follower）以及他们对应的ip,port..... 等信息,在发送消息的时候会
+> Ps : partition 的选择是在 provider 发送端做的，发送端的client 中维护了服务端的源信息（topic -> partition (leader  , follower）以及他们对应的ip,port..... 等信息,在发送消息的时候会
 
 **partition是Kafka水平扩展的基础，我们可以通过增加服务器（broker）并且在上面分配partition增加Kafka的并行处理能力**
 
@@ -59,9 +59,10 @@ zstd, lz4, snappy, gzip，不过配置的话是可以配置：
 
 崩溃broker（controler）会重新在ISR集合中选取leader https://blog.csdn.net/pengweismile/article/details/118072015
 
-具体的做法是，Kafka在zk 有一个brokers的 Znode controller 会watch这个节点的变化，broker 在其中创建的都是临时节点，一旦断开心跳节点消失，watch 会通知到controler ，然后controller 会查到该挂掉的broker中有哪些partition是leader，然后会对这些partition做leader的重新选举，选举的方式很简单，直接在ISR集合（这个集合的数据变动也是有元数据做管理的）中找一个可用的节点即可，ISR集合中的节点维护的都是Kafka承诺可靠并commit的消息，在崩溃中丢失的非HW的消息会在client中通过callback获取到发送失败的消息，同样的HW后的数据对consumer也是不可见的
+具体的做法是，Kafka在zk 有一个brokers的 Znode controller 会watch这个节点的变化，broker 在其中创建的都是临时节点，一旦断开心跳节点消失，watch 会通知到controler ，然后controller 会查到该挂掉的broker中有哪些partition是leader，然后会对这些partition做leader的重新选举，选举的方式很简单，直接在ISR集合（这个集合的数据变动也是有元数据做管理的）中找一个可用的节点即可，ISR集合中的节点维护的都是Kafka承诺可靠并完成消息commit的，在崩溃中丢失的非HW的消息会在client中通过callback获取到发送失败的消息，同样的HW后的数据对consumer也是不可见的
 
 > ISR 同步是默认使用的同步方式
+> 关于 ISR , HW 请阅读[AR,ISR,OSR,HW,LEO](#AR,ISR,OSR,HW,LEO)
 
 ## provider
 
@@ -73,7 +74,7 @@ zstd, lz4, snappy, gzip，不过配置的话是可以配置：
 
 * close : 关闭此producer对象，主要用来修改close标识，修改之后等待RecordAccumulator中所有消息清空，关闭sender线程 （reactor 单线程模式）
 
-生产者的消息发送处理是批量发送之外，还进行的数据压缩，目前支持 gzip,snappy,lz4
+生产者的消息发送处理除了批量发送之外，还进行的了数据压缩，目前支持 gzip,snappy,lz4
 
 partition的 sharding  也是在发送端控制的，如果有顺序性的要求需要指定sharding策略
 
@@ -121,7 +122,7 @@ kafka 中多个consumer可以组成一个 consumer group ，一个consumer只能
 
 consumer group 除了提供了 “独占”和“广播”模式的消息处理之外，它还可以实现消费者的水平扩展和故障转移
 
-topic中的 partition 不管是”独占“还是“广播”，partition 都是唯一对应到一个consumer的，也就是说如果partition 和consumer 刚好想等那就是1:1，如果 partition的数量大于consumer的数量那就会拿就会根据Kafka提供的负载均衡方法来分成分配，那就会出现多个partition对应到一个consumer ，但是不回出现一个partition被多个consumer消费的情况。这是Kafka保证消息有序的设计。
+topic中的 partition 不管是”独占“还是“广播”，partition 都是唯一对应到一个consumer的，也就是说如果partition 和consumer数量刚好相等那就是1:1，如果 partition的数量大于consumer的数量那就会根据Kafka提供的负载均衡方法来分成分配，那就会出现多个partition对应到一个consumer ，但是不会出现一个partition被多个consumer消费的情况。这是Kafka保证消息有序的设计。
 
 <img src="assets/image-20220416195207742.png" alt="image-20220416195207742" style="zoom:50%;" />
 
@@ -131,7 +132,7 @@ topic中的 partition 不管是”独占“还是“广播”，partition 都是
 >
 > **Range**
 >
-> 不知道咋翻译，这个是默认的策略。大概意思就是对分区进行排序，排序越靠前的分区能够分配到更多的分区。
+> 这个是默认的策略。大概意思就是对分区进行排序，排序越靠前的能够分配到更多的分区。
 >
 > 比如有3个分区，消费者A排序更靠前，所以能够分配到P0\P1两个分区，消费者B就只能分配到一个P2。
 >
@@ -169,15 +170,15 @@ topic中的 partition 不管是”独占“还是“广播”，partition 都是
 
 当topic 下面consumer的数量发生变化的时候会触发，partition的 rebalance , 实现的方式是:每个consumer group 在 broker 会有一个唯一 GroupCoordinator一一对应（选举出来的），它是Kafka用于管理consumer group的组件，GroupCoordinator 会在zookeeper 维护consumer的元数据（有多少consumer，partition负载后的结果等）在每一次consumer加入或退出的时候，GroupCoordinator 会在完成负载均衡之后修改zookeeper的信息：负载是在客户端完成的，最终由GroupCoordinator来和zookeeper交互。为什么不让每个 consumer客户端和zookeeper交互的？因为可能发生 "羊群效应" / [“脑裂问题”](https://blog.csdn.net/zxylwj/article/details/103608916) （因为consumer链接到的是不同zookeeper结点，但是这时候发生了脑裂问题。读取到的数据长时间不一致就会导致负载均衡出现问题）
 
-所以使用了中心化的 GroupCoordinator 来负责处理，同时GroupCoordinator只是维护分区的负载相关信息以及同时consumer进行负载均衡分配：GroupCoordinator 会从可用的consumer中选一个做个 group leader（这个操作只会在唯一的 leader broker 上完成），然后获取当前配置的分区策略，最后将这些信息response给consumer，consumer收到消息确定自己是leader (只有是leader的consumer才能获取到所有信息)然后该consumer根据获取到的分区策略进行分区分配
+所以使用了中心化的 GroupCoordinator 来负责处理，同时GroupCoordinator只是维护分区的负载相关信息以及对consumer进行负载均衡分配：GroupCoordinator 会从可用的consumer中选一个做个 group leader（这个操作只会在唯一的 leader broker 上完成），然后获取当前配置的分区策略，最后将这些信息response给consumer，consumer收到消息确定自己是leader (只有是leader的consumer才能获取到所有信息)然后该consumer根据获取到的分区策略进行分区分配
 
 > 1. 每个 consumer group 在服务端只会有唯一的一个 GroupCoordinator，
 > 2. 当前 consumer 准备加入 consumer group 或 GroupCoordinator发生故障转移时，consumer 并不知道GroupCoordinator 的 host 和 port，所以 consumer 会向 Kafka 集群中的任一 broker 节点发送 FindCoordinatorRequest 请求，收到请求的 broker 节点会返回 ConsumerMetadataResponse 响应，其中就包含了负责管理该 Consumer Group 的 GroupCoordinator 的地址。
 > 2.  接下来，consumer 会连接到 GroupCoordinator 节点，并周期性的发送心跳请求。GroupCoordinator 会通过心跳消费确定 consumer 是否正常在线，长时间收不到一个心跳信息时，GroupCoordinator 会认为 consumer 宕机了，就会为该 consumer group 触发新一轮的 Rebalance 操作。一个新的consumer的加入也会触发rebalance
 > 2. 在 consumer 收到中带有 IllegalGeneration 异常的心跳响应时，就表明 GroupCoordinator 发起了 Rebalance 操作。此时 consumer 会向 GroupCoordinator 发送 JoinGroupRequest ，向 GroupCoordinator 表明自己要加入指定的Consumer Group。
-> 2. roupCoordinator 等待一个 consumer group 中全部 consumer 都发送了 JoinGroupRequest 请求之后，就会结合Zookeeper 中的 partition 的元数据，进行 partition 的分配。
+> 2. groupCoordinator 等待一个 consumer group 中全部 consumer 都发送了 JoinGroupRequest 请求之后，就会结合Zookeeper 中的 partition 的元数据，进行 partition 的分配。
 > 2.  GroupCoordinator 在分配完 partition 之后，会将 partition 与 consumer 之间的映射关系写入到 Zookeeper 中保存，同时还会将分配结果通过 JoinGroupResponse 返回给 consumer。
-> 2. consumer 根据根据 JoinGroupResponse 响应中的分配结果消费对应的 partition，同时会定时发送HeartbeatRequest 请求表明自己在线。如果后续出现 **consumer 加入或下线**、**broker 上下线**、**partition 增加等状况**时，GroupCoordinator 返回的 HeartbeatResponse 会包含 IllegalGeneration 异常，接下来就会进入步骤3。
+> 2. consumer 根据 JoinGroupResponse 响应中的分配结果消费对应的 partition，同时会定时发送HeartbeatRequest 请求表明自己在线。如果后续出现 **consumer 加入或下线**、**broker 上下线**、**partition 增加等状况**时，GroupCoordinator 返回的 HeartbeatResponse 会包含 IllegalGeneration 异常，接下来就会进入步骤3。
 >
 > 上述方案看起来已经比较完美的了，但是有个问题是 rebalance 的策略是在 GroupCoordinator 中实现的，扩展性上多多少少有点问题，当我们要使用新 rebalance 策略时，需要修改 GroupCoordinator 
 >
@@ -210,7 +211,7 @@ topic中的 partition 不管是”独占“还是“广播”，partition 都是
 >
 >     <img src="assets/image-20220505133547423.png" alt="image-20220505133547423" style="zoom:50%;" />
 >
-> 但是这次改造还是又问题，因为在rebalance 的过程中，消费者们这时候不能消费任何 partition（这也是为什么在触发rebalance后消费变慢的原因）
+> 但是这次改造还是有问题，因为在rebalance 的过程中，消费者们这时候不能消费任何 partition（这也是为什么在触发rebalance后消费变慢的原因）
 >
 > 为了解决上述问题，kafka 在 2.3 版本中引入了 Static Membership 协议来减少rebalance的发生
 >
@@ -226,7 +227,7 @@ topic中的 partition 不管是”独占“还是“广播”，partition 都是
 >
 > 这样的话，在使用 Static Membership 协议的场景下，只要在 consumer 重新部署的时候，不发送 LeaveGroup Request 且在 `session.timeout.ms` 时长内重启成功，就不会触发 rebalance。
 >
-> 在 kafka 2.4 版本中，为了进一步减少 rebalance 带来的 `Stop The World`，提出了 `Incremental Cooperative Rebalance(增量合作再平衡)` 协议。其核心思想就是使用将一次全局的 rebalance，改成多次小规模 rebalance，最终收敛到 rebalance 的状态。该协议是：
+> 在 kafka 2.4 版本中，为了进一步减少 rebalance 带来的 `Stop The World`，提出了 `Incremental Cooperative Rebalance(增量合作再平衡)` 协议。其核心思想就是将一次全局的 rebalance，改成多次小规模 rebalance，最终收敛到 rebalance 的状态。该协议是：
 >
 > - consumer 比较新旧两个 partition 分配结果，只停止消费被回收的 partition，对于两次都分配给自己的 partition，consumer 根本没有必要停止消费，这也就解决了 `Stop The World` 的问题。
 >
@@ -247,6 +248,54 @@ topic中的 partition 不管是”独占“还是“广播”，partition 都是
 详情：https://cloud.tencent.com/developer/article/1832883
 
 > GroupCoordinator 中还维护了分区和consumer group 的消费关系。记录了consumer消费的offset （cunsumer 一次poll() 消费之后需要提交数据给到 GroupCoordinator ）
+
+### rebalance 的触发条件
+
+- `ConsumerGroup(消费组)`里的`Consumer(消费者)`发生变更(主动加入、主动离开、崩溃)，
+
+  - 崩溃不一定就是指 consumer进程"挂掉"、 consumer进程所在的机器宕机、长时间GC、网络延迟，
+
+    ```
+    kafka0.10.1之前的版本，会在轮询消息或者提交偏移量时发送心跳 现在大家使用的版本都是有独立线程来发送心跳的。
+    
+    
+    heartbeat.interval.ms : 3s
+    
+    The expected time between heartbeats to the consumer coordinator when using Kafka's group management facilities. Heartbeats are used to ensure that the consumer's session stays active and to facilitate rebalancing when new consumers join or leave the group. The value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.
+    
+    Kafka 的消费组管理的时候消费者协调器的心跳之间的预期时间。 心跳用于确保消费者的会话保持活动状态，并在新消费者加入或离开组时促进重新平衡。 该值必须设置为低于 <code>session.timeout.ms</code>，但通常不应设置为高于该值的 1/3。 它可以调整得更低，以控制正常重新平衡的预期时间。
+    
+    
+    
+    session.timeout.ms : 10s
+    
+    The timeout used to detect consumer failures when using Kafka's group management facility. The consumer sends periodic heartbeats to indicate its liveness to the broker. If no heartbeats are received by the broker before the expiration of this session timeout, then the broker will remove this consumer from the group and initiate a rebalance. Note that the value must be in the allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> and <code>group.max.session.timeout.ms</code>.
+    
+    Kafka 的消费组管理的时候用于检测消费者故障的超时。 消费者定期发送心跳以向代理指示其活跃度。 如果在此会话超时到期之前代理没有收到心跳，则代理将从组中删除此消费者并启动重新平衡。 请注意，该值必须在代理配置中由 <code>group.min.session.timeout.ms</code> 和 <code>group.max.session.timeout.ms</code> 配置的允许范围内 .
+    
+    
+    
+    ```
+
+  - 当 consumer无法在指定的时间内完成消息的处理，那么coordinator就认为该 consumer已经崩溃，从而引发新一轮 rebalance
+
+    ```
+    在 java 的consumer client代码中有 这样一个配置 
+    
+    max.poll.interval.ms : 30s
+    
+    The maximum delay between invocations of poll() when using consumer group management. This places an upper bound on the amount of time that the consumer can be idle before fetching more records. If poll() is not called before expiration of this timeout, then the consumer is considered failed and the group will rebalance in order to reassign the partitions to another member.
+    
+    意思是：消费组管理的时候，两次调用 poll() 之间的最大延迟。 这为消费者在获取更多记录之前可以空闲的时间设置了上限。 **如果在此超时到期之前未调用 poll()，则消费者被视为失败并且组将重新平衡以将分区重新分配给另一个成员。**
+    ```
+
+    
+
+- 订阅`topic(主题)`的`partition(分区)`数量发生变更,比如使用命令行脚本增加了订阅 topic 的分区数
+
+- 订阅`topic(主题)`的数量发生变更(比如使用正则表达式的方式订阅),当匹配正则表达式的新topic被创建时则会触发 rebalance。
+
+
 
 ## Retention Policy & Log compaction
 
@@ -270,6 +319,42 @@ kafka 会启动一个后台压缩线程，定期将 key 相同的 message 进行
 <img src="assets/1620.png" alt="img" style="zoom:60%;" />
 
 # Kafka 的可靠性保障
+
+## AR,ISR,OSR,HW,LEO
+
+leader 副本负责维护和跟踪 ISR 集合中所有 follower 副本的滞后状态， 当 follower 副本落后 太多或失效时， leader副本会把它从ISR集合中剔除。 如果OSR集合中有follower副本“追上’“了 leader副本，那么 leader副本会把它从 OSR集合转移至 ISR集合。 默认情况下， 当 leader副本发生故障时，只有在 ISR集合中的副本才有资格被选举为新的 leader， 而在 OSR集合中的副 本则没有任何机会(不过这个原则也可以通过修改相应的参数配置来改变) 。
+
+ISR 与 HW 和 LEO 也有紧密的关系 。 HW 是 High Watermark 的缩写，俗称高水位，它标识 了一个特定的消息偏移量(offset)，消费者只能拉取到这个 offset之前的消息。
+
+如图 1-4 所示，它代表一个日志文件，这个日志文件中有 9 条消息，第一条消息的 offset (LogStartOffset)为 0，最后一条消息的 offset为 8, offset为 9 的消息用虚线框表示，代表下 一条待写入 的消息 。日志文件的 HW 为 6，表示消费者只能拉取到 offset 在 0 至 5 之间的消息， 而 offset 为 6 的消息对消 费者而言是不可见 的 。
+
+<img src="assets/Screenshot 2023-07-17 at 16.21.08.png" alt="Screenshot 2023-07-17 at 16.21.08" style="zoom:50%;" />
+
+
+
+LEO 是 Log End Offset 的缩写，它标识当前日志文件中下一条待写入消息 的 offset，图 1-4 中offset为9的位置即为当前日志文件的LEO, LEO的大小相当于当前日志分区中最后一条消 息的 offset值加 l**。分区 ISR集合中的每个副本都会维护自身的 LEO，而ISR集合中最小的LEO即为分区的 HW** ，对消费者而言只能消费 HW 之前的消息。
+
+一个简单的示 例来进行相关的说明 。 如图 1-5 所示，假设某个分区的 ISR 集合中有 3 个副本，即一个 leader副本和 2 个 follower 副本，此时分区的 LEO 和 HW 都为 3。 会被先存入 leader 副本，如图 1-6 所示 。
+
+<img src="assets/Screenshot 2023-07-17 at 16.31.34.png" alt="Screenshot 2023-07-17 at 16.31.34" style="zoom:50%;" />
+
+
+
+<img src="../../../../Library/Application Support/typora-user-images/Screenshot 2023-07-17 at 16.32.08.png" alt="Screenshot 2023-07-17 at 16.32.08" style="zoom:50%;" />
+
+在消息写入 leader 副本之后， follower 副本会发送拉取请求来拉取消息 3 和消息 4 以进行消息同步。
+
+在同步过程中，不同的 follow 副本的同步效率也不尽相同。如图 1-7 所示， 在某一时刻 follower1完全跟上了 leader 副本而 follower2 只同步了消息 3，如此 leader 副本的 LEO 为 5, follower1的 LEO 为 5, follower2 的 LEO 为 4， 那么当前分区的 HW 取最小值 4，此时消费者可以消费到 offset为 0至 3 之间的消息。
+
+<img src="assets/Screenshot 2023-07-17 at 16.33.01.png" alt="Screenshot 2023-07-17 at 16.33.01" style="zoom:50%;" />
+
+写入消息(情形的如图 1-8 所示 ，所有的副本都成功 写入 了消息 3 和消息 4，整个分区的 HW 和 LEO 都变为 5，因此消费者可以消费到 offset为 4 的消息了 。
+
+<img src="../../../../Library/Application Support/typora-user-images/Screenshot 2023-07-17 at 16.33.27.png" alt="Screenshot 2023-07-17 at 16.33.27" style="zoom:50%;" />
+
+由此可见， Kafka 的复制机制既不是完全的同步复制，也不是单纯的异步复制。事实上， 同步复制要求所有能工作的 folower 副本都复制完，这条消息才会被确认为已成功提交，这种复制方式极大地影响了性能。而在异步复制方式下， follower 副本异步地从 leader 副本中复制数据，数据只要被 leader 副本写入就被认为已经成功提交。在这种情况下，如果 follower 副本都 还没有复制完而落后于 leader 副本，突然 leader 副本着机，则会造成数据丢失。 Kafka 使用的这种 ISR 的方式则有效地权衡了数据可靠性和性能之间的关系。
+
+
 
 ## 发送端
 
@@ -295,7 +380,7 @@ page cache 写入，因为通常是不会采用同步刷盘的，所以存在丢
 
 消费者丢失的可能就比较简单，关闭自动提交位移即可，改为业务处理成功手动提交。
 
-因为重平衡发生的时候，消费者会去读取上一次提交的偏移量，自动提交默认是每5秒一次，这会导致重复消费。
+因为重平衡发生的时候，消费者会去读取上一次提交的偏移量，自动提交默认是每5秒一次，发生故障的时候这很容易导致重复消费。
 
 `enable.auto.commit=false`，设置为手动提交。还没有提交前。机器挂了也可能重复消费，但是不会丢失消息，其中有两种提交方式
 
@@ -318,9 +403,9 @@ https://blog.csdn.net/qq_41049126/article/details/111247370
 
 # 序列化
 
-kakfa 可以指定对 key , value 锁使用的序列化方法 ,需要注意的是 provider，consumer 要配置相同的序列化算法，不然会导致无法解析
+kakfa 可以指定对 key , value 所使用的序列化方法 ,需要注意的是 provider，consumer 要配置相同的序列化算法，不然会导致无法解析
 
-默认的是：org.apache.kafka.common.serialization.Serde
+默认的是：org.apache.kafka.common.serialization.StringSerializer
 
 # 线程模型
 

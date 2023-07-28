@@ -2,7 +2,7 @@ CAP
 
 分布式系统不可能同时满足一致性（C：Consistency）、可用性（A：Availability）和分区容忍性（P：Partition Tolerance），最多只能同时满足其中两项。
 
-![image-20200508192442804](assets\image-20200508192442804.png)
+![image-20200508192442804](assets/image-20200508192442804.png)
 
 
 
