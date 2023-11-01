@@ -237,7 +237,7 @@ static int indexFor(int h, int length) {
 
 为了让查找的成本降低，应该使 N/M 尽可能小，因此需要保证 M 尽可能大，也就是说 table 要尽可能大。HashMap 采用动态扩容来根据当前的 N 值来调整 M 值，使得空间效率和时间效率都能得到保证。
 
-**当存储的数据的size > 负载因子指定的数量的时候就回触发扩容**
+**当存储的数据的size > 负载因子指定的数量的时候就会触发扩容**
 
 和扩容相关的参数主要有：capacity、size、threshold 和 load_factor。
 

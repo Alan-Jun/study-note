@@ -73,8 +73,8 @@
 
 # 5.Spring AOP的底层实现原理
 
-* Spring AOP 默认使用AOP代理的标准 `JDK 动态代理`。这使得任何接口（或接口集）都可以被代理。 
-* Spring AOP也可以使用`CGLIB`代理。这是代理类而不是接口所必需的。如果业务对象未实现接口，则默认使用CGLIB。 
+* Spring AOP 可以使用AOP代理的标准 ` 动态代理`。这使得任何接口（或接口集）都可以被代理。 
+* Spring AOP 默认使用`CGLIB`代理。这能让任何类都能被代理。
 
 # 6.spring AOP具体的使用方式
 
@@ -950,7 +950,7 @@ public class AopByAnnotationTest extends UnitTestBase {
 **`args(m1,m2)`**，**表达式中的内容就是 advice方法的两个参数，一定要和匹配的连接点方法参数名相同**，这样写了之后 下面的代码执行过程中  这个`m1 = ' hello' , m2 = ' world' `；最后的执行结果 就是将 m1.m2的值传给方法对应的参数 `sayHello("hello","world")` 结果就是：
 
 ```
- hello  hello  world 
+ hello  world 
  猴子 上树  hello  world 
 ```
 
@@ -989,7 +989,7 @@ public class MyAspect {
 然后 `argNames = "m2,m1"` （**这种方式不推荐**）这个说的是把值按照 m2,m1 的顺序 传给 `sayHello(String m1,String m2)` 方法，相当于 `sayHello("world","hello")` 那么结果就是 
 
 ```
-hello  world  hello 
+world  hello 
 猴子 上树  hello  world 
 ```
 
@@ -1150,7 +1150,7 @@ public class AopByAnnotationTest extends UnitTestBase {
 
 ## 6.5 advisor
 
-这个主要是在事务管理中使用，` aspect`可以配置多个`advice`,  `advisor` 配置配置一个`advice`并且对应一个`PointCut`
+这个主要是在事务管理中使用，` aspect`可以配置多个`advice`,  `advisor` 配置一个`advice`并且对应一个`PointCut`
 
 ## 6.6 advice order
 

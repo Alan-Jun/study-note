@@ -31,7 +31,7 @@ Channel 用于字节缓冲区和通道另一侧的实体（文件/socket...）�
 
 ### 基本的 Channel 示例
 
-```
+```java
 RandomAccessFile aFile = new RandomAccessFile("data/nio-data.txt", "rw");
 FileChannel inChannel = aFile.getChannel();
 
@@ -39,16 +39,15 @@ ByteBuffer buf = ByteBuffer.allocate(48);
 
 int bytesRead = inChannel.read(buf);
 while (bytesRead != -1) {
+	System.out.println("Read " + bytesRead);
+	buf.flip();
 
-System.out.println("Read " + bytesRead);
-buf.flip();
+    while(buf.hasRemaining()){
+        System.out.print((char) buf.get());
+    }
 
-while(buf.hasRemaining()){
-System.out.print((char) buf.get());
-}
-
-buf.clear();
-bytesRead = inChannel.read(buf);
+	buf.clear();
+	bytesRead = inChannel.read(buf);
 }
 aFile.close();
 ```

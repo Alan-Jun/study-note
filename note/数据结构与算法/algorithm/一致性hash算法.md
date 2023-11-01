@@ -213,7 +213,7 @@ final Entry<K,V> getCeilingEntry(K key) {
  13 public class ConsistentHashLoadBalance {
  14 
  15     private TreeMap<Long, String> virtualNodes = new TreeMap<>();
- 16     private LinkedList<String> nodes;        //每个真实节点对应的虚拟节点数
+ 16     private LinkedList<String> nodes;        //每个真实节点对应的虚拟节点
  17     private final int replicCnt;
  18 
  19     public ConsistentHashLoadBalance(LinkedList<String> nodes, int replicCnt){

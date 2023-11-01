@@ -198,8 +198,8 @@ Entry对象Key为弱引用，当Key所指对象无强引用时，JVM GC时会自
 
 ```java
 /**
- * 从 staleSlot 开始知道遇到第一个 空的位置，将沿途发现的所有 STALE状态的Entry清理，同时如果发现
- * 非STALE状态Entry，如果发现他的hash值计算得到索引位置 h 和 他当前的位置i不想等则重新给他找位置
+ * 从 staleSlot 开始直到遇到第一个 空的位置，将沿途发现的所有 STALE状态的Entry清理，同时如果发现
+ * 非STALE状态Entry，如果发现他的hash值计算得到索引位置 h 和 他当前的位置i不相等则重新给他找位置
  **/
 private int expungeStaleEntry(int staleSlot) {
     Entry[] tab = table;
@@ -432,12 +432,4 @@ private Entry getEntryAfterMiss(ThreadLocal<?> key, int i, Entry e) {
 
 ## ThreadLocal 内存泄漏问题
 
-有了上面我们的 ThreadLocal 的介绍，我们知道 ThreadLocal 在使用的时候会给每一个是用到它的线程创建一个 ThreadLocalMap 用来存放线程各自的副本，我们知道通常我们的线程的使用都是利用到线程池的，还有就是在一个服务系统中很可能线程池中的这些线程都是不会销毁的，也就是说如果有100个这样的线程没有销毁，在只有一个TheadLocal变量的时候，这100个线程中就存在 100个 ThreadLocalMap，以及 100个ThreadLocalMap 中会分别存放一个 entry；在这样的情况下，我们就会面临两种内存泄漏情况：
-
-* 一种是 TheadLocal 是被强引用的情况：由于 TheadLocal 变量被强引用着，无法对其进行内存擦除，会导致上面描述的内存泄露（一个 threadLocal实例，100个value实例，100个entry实例）
-
-* 一种是仅弱引用的情况：这个是 Josh Bloch 和 Doug Lea 对TheadLocal 的优化，为了避免非 static TheadLocal变量内存泄漏设计的内存擦除方案，利用弱饮用的特性，线程执行完成之后，非 static TheadLocal变量的引用在发生gc回收之后被移除线程虚拟机栈之后，也就是thread 中的 threadLocals的中的这个Key,value 的key得到了释放 key=null，但是value 是没法释放的，因为被线程的 threadLocals 持有了强引用，所以我们为了避免这种内存泄漏问题，需要在每次使用完之后执行 remove方法
-
-  由于我们threadLocalMap 是通过线性探测解决冲突的，所以在访问一个线程的threadLocalMap的时候如果发现key=null. 也是会去清理这个泄漏的内存的，不过还是在使用完成之后正常屌用remove()会更好一些
-  
-  
+有了上面我们的 ThreadLocal 的介绍，我们知道 ThreadLocal 在使用的时候会给每一个是用到它的线程创建一个 ThreadLocalMap 用来存放线程各自的副本，我们知道通常我们的线程的使用都是利用到线程池的，还有就是在一个服务系统中很可能线程池中的这些线程都是不会销毁的，也就是说如果有100个这样的线程没有销毁，在只有一个TheadLocal变量的时候，这100个线程中就存在 100个 ThreadLocalMap，以及 100个ThreadLocalMap 中会分别存放一个 entry；如果这些线程在执行完成任务之后没有新任务进来，相当于相当于限制的线程，但是这些线程占用的TheadLocal的entry确没有得到释放。相当于内存泄露了。虽然由于Key是弱引用会在gc的且内内存不足的回收掉，但是value 是无法回收掉的的。所以在在使用的时候 用完需要记得调用 remove() 方法。

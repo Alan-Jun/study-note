@@ -30,7 +30,7 @@ AbstractQueuedLongSynchronizer **队列同步器**，是**用来构建锁或者�
 | public final boolean **tryAcquireNanos**(int arg, long nanosTimeout) | 在**acquireInterruptibly**的基础上增加了超时限制，**如果在超时限制范围内未获取到同步状态那么返回**false,获取到返回true | [tryAcquireNanos](#tryAcquireNanos)                       |
 | public final boolean **release**(int arg)                    | 独占式的释放同步状态，该方法释放同步状态之后会将同步队列中第一个节点唤醒 **调用tryRelease** | [release](#release)                                       |
 |                                                              |                                                              |                                                           |
-| public final void **acquireShared**(int arg)                 | 共享式获取同步状态，如果当前线程未获取到同步状态，将会进入同步队列等待，与独占式的区别在同一时刻可以有多个线程获取到同步状态，**调用重写的tryAcquireShared方法** | [acquireShared](#acquireShared)                           |
+| public final void **acquireShared**(int arg)                 | 共享式获取同步状态，如果当前线程未获取到同步状态，将会进入同步队列等待，与独占式的区别是在同一时刻可以有多个线程获取到同步状态，**调用重写的tryAcquireShared方法** | [acquireShared](#acquireShared)                           |
 | public final void **acquireSharedInterruptibly**(int arg)    | 和**acquireShared**相同，不过该方法响应中断                  | [acquireSharedInterruptibly](#acquireSharedInterruptibly) |
 | public final boolean **tryAcquireSharedNanos**(int arg, long nanosTimeout) | 在**acquireSharedInterruptibly**方法基础上增加超时限制       | [tryAcquireSharedNanos](#tryAcquireSharedNanos)           |
 | public final boolean **releaseShared**(int arg)              | 共享式释放同步状态                                           | [releaseShared](#releaseShared)                           |
@@ -169,7 +169,7 @@ final boolean acquireQueued(final Node node, int arg) {
                     failed = false;
                     return interrupted;
                 }
-                // 通过 shouldParkAfterFailedAcquire 判断前驱节点的状态是，它获取到同步状态后会通知后继节点unpark的时候，当前节点也就可以通过parkAndCheckInterrupt方法使用LockSupport.park(this);将线程阻塞，这样可以避免无用的自旋消耗CPU资源，在parkAndCheckInterrupt中还会检查当前线程是否被中断过，只要发生就会使用 interrupted=true 记录下来，作用是在之后如果获取到锁了，会调用线程的中断方法，安全中断该线程（也就是 selfInterrupt这个方法）
+                // 通过 shouldParkAfterFailedAcquire 判断前驱节点的状态是，它获取到同步状态后会通知后继节点unpark的时候，当前节点也就可以通过parkAndCheckInterrupt方法使用LockSupport.park(this);将线程切换到wait状态，这样可以避免无用的自旋消耗CPU资源，在parkAndCheckInterrupt中还会检查当前线程是否被中断过，如果被中断过就会使用 interrupted=true 记录下来，作用是在之后如果获取到锁了，会调用线程的中断方法，安全中断该线程（也就是 selfInterrupt这个方法）
                 if (shouldParkAfterFailedAcquire(p, node) &&
                     parkAndCheckInterrupt())
                     interrupted = true;
@@ -291,7 +291,7 @@ private void unparkSuccessor(Node node) {
             compareAndSetWaitStatus(node, ws, 0);
 	    //找到下一个需要唤醒的结点s
         Node s = node.next;
-        if (s == null || s.waitStatus > 0) { //有的同学会问为啥存在s==null，独占式的不存在这样的问题，但是共享锁是多个线程在执行，这个节点的线程在释放锁走到这一步了，某一个线程在这个时候获取到锁了，讲head指向了自己，那么就会存在 s == null 的情况了
+        if (s == null || s.waitStatus > 0) { //有的同学会问为啥存在s==null，独占式的不存在这样的问题，但是共享锁是多个线程在执行，这个节点的线程在释放锁走到这一步了，某一个线程在这个时候获取到锁了将head指向了自己，那么就会存在 s == null 的情况了
             s = null;
             for (Node t = tail; t != null && t != node; t = t.prev) // 从后向前找。为什么从后向前查找？ 因为s==null的情况没办法从前往后查找
                 if (t.waitStatus <= 0)// <=0的结点，都是还有效的结点。无效节点会在 shouldParkAfterFailedAcquire 方法中被丢弃的
@@ -371,7 +371,7 @@ private void doReleaseShared() {
                  !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
                 continue;                // loop on failed CAS
         }
-        if (h == head)// head没有变化的时候循环中止，这里有点辅助唤醒的意味，提升可以更快唤醒共享线程
+        if (h == head)// head没有变化的时候循环中止，这里有点辅助唤醒的意味，可以更快唤醒共享线程
             break;
     }
 }
@@ -573,7 +573,7 @@ public final Collection<Thread> getQueuedThreads() {
 
 ## 共享式获取
 
-和独占式的流程如差不了多少，只是共享锁只是支持在做唤醒时能唤醒更多的等待节点
+和独占式的流程如差不了多少，只是共享锁只是支持在唤醒时能唤醒更多的等待节点
 
 ## 共享式超时获取
 

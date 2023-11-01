@@ -1,6 +1,10 @@
+https://cn.dubbo.apache.org/zh-cn/overview/quickstart/
+
 # 扩展点加载方式介绍
 
 在介绍dubbo的扩展加载方式前，我们先看看SPI
+
+dubbo 官方文档： 对扩展点的解释https://cn.dubbo.apache.org/zh-cn/overview/mannual/java-sdk/reference-manual/spi/description/dubbo-spi/
 
 ## SPI （service provider interface）
 
@@ -8,7 +12,7 @@
 
 SPI在我理解起来更多是一种流程的控制，有点类似于控制反转感觉，现在我们来看一个图
 
-![image-20210714195959010](/Users/ypp/work_space/study-note/note/dubbo/assets/image-20210714195959010.png)
+![image-20210714195959010](assets/image-20210714195959010.png)
 
 正常场景下我们是在使用实现方（provider方）的接口以及实现类来完成我们的功能，但是这种调用有的时候是不够灵活，并且扩展性不怎么好，比如数据库的操作，如果按照这样的逻辑来实现的话，mysql 自己实现一套接口定义，pgsql 自己实现一套接口定义，那么在我们的开发过程中，如果需要从pgsql 切换到mysql 由于接口定义的不同，意味着我们的代码改动量可能会很大，但是如果我们将这种流程反转一下，先提供接口的规范定义，SPI(service provider interface) 服务方提供接口的实现，相信大家在java的使用中都发现了，我们的调用都是遵循同一套契约的（接口定义），然后只需要切换供应商的包，即可使用同一个接口规范实现对数据库的访问。
 
@@ -61,8 +65,8 @@ Dubbo 改进了 JDK 标准的 SPI 的以下问题：
 
 在详细讲解之前我想先简单说一下 `ExtensionLoader` 这个类，他可以说是我们整个Dubbo的SPI的核心，它具备了抽象工厂的能力，又具备了像是策略模式一样生产 adpative 实例的能力（java动态生成）,同时还提供了setter注入能力，同时还有使用到责任链模式一样的wrapper设计，所以在我看来 `ExtensionLoader` 就是一个具有丰富多样能力的多功能工厂
 
-```
-org.apache.dubbo.common.extension.ExtensionLoader#getExtension(String name) // 更具name获取指定实现类（如果有 wrapper 实现，那么这个实现类是被wrapper实现类代理的实现类）
+```css
+org.apache.dubbo.common.extension.ExtensionLoader#getExtension(String name) // 更具name获取指定实现类（如果有 wrapper 实现，那么这个实现类是被wrapper实现类装饰的实现类）
 org.apache.dubbo.common.extension.ExtensionLoader#getAdaptiveExtension() // 获取自适应的实现类Adaptive实现类，这也是一个代理类，原因是为了实现在实际执行的时候根据配置选取用户配置的真正实现类来执行功能
 org.apache.dubbo.common.extension.ExtensionLoader#getActivateExtension(URL url, String key, String group)// 该方法是为了获取所有被 @Activate 注解修饰的实现类列表，根据我们的url读取key指定的参数，然后选取在@Activate所指定的group下的所有实现类，主要是用来构建责任链（使用Filter举例的时候我们会看到这个的作用）
 ```
@@ -72,6 +76,8 @@ org.apache.dubbo.common.extension.ExtensionLoader#getActivateExtension(URL url, 
 在扩展类的 jar 包内放置增加扩展点配置文件 `META-INF/dubbo/接口全限定名` 或 `META-INF/dubbo/接口全限定名，内容为：配置名=扩展实现类全限定名`，多个实现类用换行符分隔。
 
 2.7.7 版本还支持 在这两个目录下 做扩展 `META-INF/dubbo/internal/ ，META-INF/dubbo/external/  `
+
+**最新的：** 目前有四种策略，分别读取 META-INF/services/ ， META-INF/dubbo/ ， META-INF/dubbo/internal/ ， META-INF/dubbo/external/ 这四个目录下的配置文件
 
 ### 扩展点特性
 
@@ -200,7 +206,7 @@ public class Protocol$Adaptive implements com.alibaba.dubbo.rpc.Protocol {
 1. 注入spring管理的类，
 2. 以及@SPI管理的扩展点
 
-两者是互斥的，后面的源码阅读中会解释再次之前我们先看一个例子：这个是dubbo 官方文档的例子：
+两者是互斥的，后面的源码阅读中会解释，在次之前我们先看一个例子：这个是dubbo 官方文档的例子：
 
 https://dubbo.apache.org/zh/docs/v2.7/dev/spi/#%E6%89%A9%E5%B1%95%E7%82%B9%E8%87%AA%E5%8A%A8%E8%A3%85%E9%85%8D
 
@@ -371,7 +377,7 @@ public class SpiExtensionFactory implements ExtensionFactory {
     public <T> T getExtension(Class<T> type, String name) {
         if (type.isInterface() && type.isAnnotationPresent(SPI.class)) {
             ExtensionLoader<T> loader = ExtensionLoader.getExtensionLoader(type);
-          	// 只要这是一个spi的借口，并且具有是实现类，那么就将Adaptive代码实例返回
+          	// 只要这是一个spi的接口，并且具有是实现类，那么就将Adaptive代码实例返回
             if (!loader.getSupportedExtensions().isEmpty()) {
                 return loader.getAdaptiveExtension();
             }
@@ -390,7 +396,9 @@ public class SpiExtensionFactory implements ExtensionFactory {
 org.apache.dubbo.common.extension.ExtensionLoader#getActivateExtension(URL url, String key, String group)// 该方法是为了获取所有被 @Activate 注解修饰的实现类列表，根据我们的url读取key指定的参数，然后选取在@Activate所指定的group下的所有实现类，主要是用来构建责任链（使用Filter举例的时候我们会看到这个的作用）
 ```
 
-主要是用于后去一组 @Activate 实现类，然后他们将依据 @Activate 中的 order 字段进行排序，值越大排在越后面，为了更形象的理解可以在dubbo启动的时候debug,ProtocolFilterWrapper类的export，以及refer方法，就能看到 @Activate做了什么
+主要是用于获取一组 @Activate 实现类，然后他们将依据 @Activate 中的 order 字段进行排序，值越大排在越后面，为了更形象的理解可以在dubbo启动的时候debug,ProtocolFilterWrapper类的export，以及refer方法，就能看到 @Activate做了什么
+
+这个责任链是在调用这个接口对应的方式的时候被使用到的，类似与一个MVC中的一系列拦截器
 
 # SPI可扩展实现
 
@@ -400,7 +408,7 @@ https://dubbo.apache.org/zh/docs/v2.7/dev/impls/
 
 * filter的扩展 在他dubbo的官网中没有说，这里我们做一个实用性的介绍，利用到的正式我们的@Activate的特性
 
-  这里我们希望实现，provider的借口的黑白名单控制，以及cat埋点功能，利用切面的方式当前也可以实现，但是在获取dubbo上线文的时候可能会没有使用 Filter 这样能简单方便的获取到我们的接口信息，以及调用方信息，下面是式例
+  这里我们希望实现，provider的接口的黑白名单控制，以及cat埋点功能，利用切面的方式当前也可以实现，但是在获取dubbo上下文的时候可能会没有使用 Filter 这样能简单方便的获取到我们的接口信息，以及调用方信息，下面是式例
 
   ```java
   @Slf4j

@@ -200,7 +200,7 @@ private void doSignalAll(Node first) {
 
 ## LockSupport
 
-在介绍JUC中等饿lock（实现类）工具之前我们先来了解一下 LockSupport 工具 。在JUC中当我们需要阻塞或唤醒一个线程的时候，都会使用到LockSupport工具来完成相关工作，它定义一组公共的static方法，来实现最基本的线程阻塞和唤醒功能。
+在介绍JUC中等lock（实现类）工具之前我们先来了解一下 LockSupport 工具 。在JUC中当我们需要park或唤醒一个线程的时候，都会使用到LockSupport工具来完成相关工作，它定义一组公共的static方法，来实现最基本的线程阻塞和唤醒功能。
 
 | 方法名                                      | 描述                                                         |
 | ------------------------------------------- | ------------------------------------------------------------ |
@@ -247,7 +247,7 @@ public class ReentrantLockTest {
 
     /**
      * 使用场景:(1)同步操作 类似于synchronized  如果被其它资源锁定，会在此等待锁释放，达到暂停的效果
-     * ReentrantLock存在公平锁与非公平锁  而且synchronized都是公平的
+     * ReentrantLock存在公平锁与非公平锁  而且synchronized都是非公平的
      */
     public static void lockTest() {
         try {
@@ -474,7 +474,7 @@ static final class NonfairSync extends Sync {
 
 ### ReentrantLock对Lock的实现
 
-这里我这要说一trylocka方法，因为别的接口实现，都是和AQS定义的那些对应的模板方法相对应的，没有什么说明的必要
+这里我这要说一trylock方法，因为别的接口实现，都是和AQS定义的那些对应的模板方法相对应的，没有什么说明的必要
 
 * **tryLock** 
 
@@ -489,7 +489,7 @@ static final class NonfairSync extends Sync {
 * 非公平锁在使用时，由于使用的是抢占模式（谁抢到是谁的），这样就会避免公平性锁的问题，**能更充分的利用cpu**,**以及减少线程上下文切换带来的cpu损耗**，不过也会带来问题：**会导致线程饥饿现象**
 * 公平模式，基于同步器的FIFO队列，在同步器（使用FIFO队列）中会转到等待状态，直到他的前驱节点唤醒它，从唤醒到线程运行存在着较大延迟，带来了更多的线程上下文切换**导致对cpu的利用不够充足，以及上下文切换带来的性能损耗，也就是说会牺牲系统的吞吐量**
 
-## ReadWriteLock 
+## ReadWriteLock - ReentrantReadWriteLock
 
 实现类 ReentrantReadWriteLock 
 
@@ -1115,6 +1115,8 @@ CyclicBarrier的字面意思是**可循环使用（Cyclic）的屏障（Barrier�
 
 **使用它的 reset() 方法可重置，重复使用**
 
+https://blog.csdn.net/weixin_34415923/article/details/94653917
+
 ### 使用方式
 
 **构造方法**
@@ -1385,10 +1387,14 @@ public void reset() {
     }
 ```
 
+
+
 ## CountDownLatch和CyclicBarrier的区别
 
-1. CountDownLatch是线程组之间的等待，即一个(或多个)线程等待N个线程完成某件事情之后再执行；而CyclicBarrier则是线程组内的等待，即每个线程相互等待，即N个线程都被拦截之后，然后依次执行。
+1. CountDownLatch是线程组之间的等待，即一个(或多个)线程等待N个线程完成某件事情之后再执行；而CyclicBarrier则是线程组内的等待，即每个线程相互等待，即N个线程都被拦截之后等到同时抵达同一状态障之后，放闸。CyclicBarrier 还可以传递一个runnable 对象可以到放闸的时候，执行这个任务。
+
 2. CountDownLatch计数为0无法重置，而CyclicBarrier计数达到初始值，则可以重置，对象直接可重复使用。
+
 3. CyclicBarrier是利用 lock的Condition的wait，加入到等待队列中被park，直到被唤醒->加入到lock的同步队列中去执行 。 CountDownLatch的线程等待是被加入到了lock的线程同步队列中，然后被park。
 
 ## Semaphore

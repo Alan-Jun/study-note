@@ -4,7 +4,7 @@ MVCC，Multi-Version Concurrency Control，多版本并发控制。MVCC 是一�
 
 通常我们在实现并发控制的时候**最简单的方式是使用加锁，读写完全互斥的方式来实现**，但是这样就意味着，**事务A在写的时候，会阻塞所有的读事务的操作，这对系统吞吐量，以及性能的损耗是相当大的**。所以就有了MVCC，它可以在一个事务A写这条数据的情况下，实现其他事务还可以读这条数据。**实现了一致性非阻塞读**
 
-**缺点**就是：浙西而快照数据会占用更多的空间，同时也需要定期清理（系统自动），**也就是采用了空间换时间的思路**
+**缺点**就是：这些快照数据会占用更多的空间，同时也需要定期清理（系统自动），**也就是采用了空间换时间的思路**
 
 # MVCC实现原理
 
@@ -20,7 +20,7 @@ MVCC，Multi-Version Concurrency Control，多版本并发控制。MVCC 是一�
 
 ## mvcc 依赖项
 
-MVCC 在mysql 中的实现依赖的是 **undo log** 与 **read view**。
+MVCC 在mysql 中的实现依赖的是 **undo log** 与 [**read view**](#read view)。
 
 ### undo log
 
@@ -50,37 +50,29 @@ MVCC 在mysql 中的实现依赖的是 **undo log** 与 **read view**。
 
 ### read view
 
-系统当前的 read view 数据
+系统当前的 read view 数据：
 
-```text
-ReadView {
-    creator_trx_id
-    low_limit_id
-    up_limit_id
-    ids
-    ...
-}
-```
+**m_ids**：在⽣成ReadView时，当前系统中活跃的事务id列表
 
-**creator_trx_id** 创建这个ReadView的事务ID（系统最新的一个事务的ID）
+**min_trx_id**：在⽣成ReadView时，当前系统中活跃的最⼩的事务id，也就是m_ids中的最⼩值
 
-**low_limit_id** 下限（时间&事务维度下限就是最大的那一个值） 所有事务ID大于或等于low_limit_id对当前事务都不可见
+**max_trx_id**：在⽣成ReadView时，系统应该分配给下⼀个事务的事务id值
 
-**up_limit_id** 上限（时间&事务维度下限就是最小的那一个值）所有事务ID严格小于up_limit_id的事务对当前事务可见
+**creator_trx_id**：⽣成该ReadView的事务的事务id
 
-**ids** 未提交的事务ID列表
 
-可见性判断的伪代码：
+
+可见性判断的伪代码：不可见的 trx_id 都会根据版本链继续使用这个方法查找到可见的为止否则查询直到链的最末端。
 
 ```
 IsVisible(trx_id)
     if (trx_id == creator_trx_id)     // 当前事务
         return true;
-    else if (trx_id < up_limit_id)    // ReadView创建时, 事务已提交
+    else if (trx_id < min_trx_id)    // ReadView创建时, 事务已提交
         return true;
-    else if (trx_id >= low_limit_id)  // ReadView创建时，事务还未被创建
+    else if (trx_id >= max_trx_id)  // ReadView创建时，事务还未被创建
         return false;
-    else if (trx_id is in m_ids)  // ReadView创建时，事务正在执行，但未提交
+    else if (trx_id is in m_ids)  // ReadView创建时，事务正在执行，但未提交,也就是活跃中的事务
         return false
     else                          // ReadView创建时, 事务已提交
         return true;

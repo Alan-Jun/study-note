@@ -61,7 +61,7 @@
 
 ## 1.2 作用于类的注解
 
-这类注解的最基础的注解（不考虑spring 对JSR 330支持的情况下 ）是spring的 `@Component` 这个注解（元注解）。然后就是用这个注解修饰的注解了，比如`@Repository`  ，`Servise`
+这类注解的最基础的注解（不考虑spring 对JSR 330支持的情况下 ）是spring的 `@Component` 这个注解（元注解）。然后就是用这个注解修饰的注解了，比如`@Repository`  ，`Service`
 
 ```java
 @Target({ElementType.TYPE})

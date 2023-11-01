@@ -1783,6 +1783,8 @@ http://www.redis.cn/commands/scan.html
 - [ZLEXCOUNT](#ZLEXCOUNT)
 - ...
 
+http://www.redis.cn/commands/zlexcount.html
+
 ### ZADD
 
 `ZADD key [NX|XX] [CH] [INCR] score member [score member ...]`
@@ -1840,7 +1842,7 @@ member成员的score值（double型浮点数），以字符串形式表示。
 
 ### ZINCRBY
 
-`ZINCRBY key increment member`
+​	
 
 > **起始版本：1.2.0**
 >

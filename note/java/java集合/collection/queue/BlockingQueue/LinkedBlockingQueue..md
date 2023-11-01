@@ -10,7 +10,9 @@
 
 队列节点使用next指针连接，由于是**双锁**，所以**count队列元素计数器使用了 AtomicInteger 来实现线程间的可见，以及并发安全，并且双锁的协调也是有这个字段来提供通信的。**双锁主要用来使得 take,put 这样的操作能够并行，提升队列的并发度，以提升队列的整个吞吐性能，
 
-需要注意的是，他的 head 不存储元素，实际的元素是从head.next 开始存储的
+需要注意的是，他的 head 不存储元素，实际的元素是从head.next 开始存储的，
+
+能够实现take , put 并发还有一个关键点是 enqueue方法和dequeue方法，巧妙的完成了移除head和给tail.next 添加新的节点
 
 ```java
 public class LinkedBlockingQueue<E> extends AbstractQueue<E>
@@ -60,6 +62,12 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
 
     /** Wait queue for waiting puts */
     private final Condition notFull = putLock.newCondition();
+    
+    public LinkedBlockingQueue(int capacity) {
+        if (capacity <= 0) throw new IllegalArgumentException();
+        this.capacity = capacity;
+        last = head = new Node<E>(null); // 这里很重要，初始化的时候 这里head和last是初始化了一个节点的
+    }
 
     /**
      * Signals a waiting take. Called only from put/offer (which do not
@@ -111,6 +119,7 @@ public class LinkedBlockingQueue<E> extends AbstractQueue<E>
         Node<E> h = head;
         Node<E> first = h.next;
         h.next = h; // help GC
+        // 下面这里很巧妙的使用 h.next 替换成 head,并移除值得方式配合 enqueue方法 中得 last.next = node ，完成了take和put能够并行修改数据。提高了整体得并发度
         head = first;
         E x = first.item;// 获取值
         first.item = null;// 移除队首

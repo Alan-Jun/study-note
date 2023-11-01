@@ -132,7 +132,7 @@ private E removeAt(int i) {
     else {
         E moved = (E) queue[s];// 获取尾部数据
         queue[s] = null;
-        siftDown(i, moved);// 将尾部的数据放到被删除的位置，将其当作一个堆操作下趁
+        siftDown(i, moved);// 将尾部的数据放到被删除的位置，将其当作一个堆操作下沉
         if (queue[i] == moved) { // 如果这个数没有下沉，那么在操作一次上浮，确认是否需要向上移动
             siftUp(i, moved);
             if (queue[i] != moved)

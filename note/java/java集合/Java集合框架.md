@@ -381,7 +381,7 @@ ArrayList 基于动态数组实现，LinkedList 基于双向链表实现。Array
 
 从名字可以看出*ArrayDeque*底层通过数组实现，为了满足可以同时在数组两端插入或删除元素的需求，该数组还必须是循环的，即**循环数组（circular array）**，也就是说数组的任何一点都可能被看作起点或者终点。*ArrayDeque*是非线程安全的（not thread-safe），当多个线程同时使用的时候，需要程序员手动同步；另外，该容器不允许放入`null`元素。
 
-### 3. 与 Hashtable 的比较
+## Hashmmap与 Hashtable 的比较
 
 - Hashtable 使用 synchronized 来进行同步。
 - HashMap 可以插入键为 null 的 Entry。

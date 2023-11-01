@@ -9,5 +9,7 @@
 
 * **thread safety** 线程安全
   * HashTable：和 HashMap 类似，但它是线程安全的，这意味着同一时刻多个线程同时写入 HashTable 不会导致数据不一致。它是遗留类，不应该去使用它，而是使用 ConcurrentHashMap 来支持线程安全，ConcurrentHashMap 的效率会更高，因为 1.8  ConcurrentHashMap 数组节点使用CAS自旋更新，而链表上使用 synchronized 来同步，并发的时候锁的粒度更细，并发性能更好。
+  
   * [ConcurrentHashMap](thread-safety/ConcurrentHashMap.md)
-  * 
+  
+    

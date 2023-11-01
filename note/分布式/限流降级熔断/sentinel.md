@@ -14,7 +14,9 @@ sentinel它的核心功能主要是流量控制，熔断降级等等，这些都
 
 流量控制又叫做过载保护，sentinel提供下面几种能力，功能详情可以在上文链接的官网中查看这里就不重复了，主要想聊聊他提供的功能使用到的算法：
 
-* 匀速器：保证平均qps的令牌桶算法，支持流量的一定的突发，但是并不是它文档中描述的严格的匀速 [算法代码：RateLimiterController.canPass](#令牌桶算法)
+* 直接拒绝：不需要特别的算法，根据获取的统计数据直接和规则做对比即可 采用的是 **[滑动窗口算法](#滑动窗口算法)**
+
+* 匀速器：即是让请求以均匀的速度通过，对应的是漏桶算法 [算法代码：RateLimiterController.canPass](#漏桶算法)
 
   ![image-20220310164628396](assets/image-20220310164628396.png)
 
@@ -203,8 +205,6 @@ sentinel它的核心功能主要是流量控制，熔断降级等等，这些都
   
   ```
 
-* 直接拒绝：不需要特别的算法，根据获取的统计数据直接和规则做对比即可
-
 ## 熔断降级
 
 这个比较简单，基于上层通过滑动窗口统计到的数据和熔断降级规则做比较，符合条件的走熔断降级逻辑即可，未匹配上任何条件放行
@@ -265,15 +265,21 @@ WindowWrap有几个参数：
 几个核心方法实现了窗口的滑动，同时由于巧妙的环形设计，统计窗口中的计数只需要将所有小窗口的值加起来即可获取到窗口时间内的总值，这时候就可以直接判断是否应该拦截请求了，如果可以通过，就可以使用下面的方法来给当前时间对应的窗口叠加一次新的计数
 
 * currentWindow 方法：用于在放行条件下选取最新的小窗口增加计数，同时窗口的滑动逻辑也在其中
-* calculateTimeIdx 方法：用于currentWindow内部逻辑中帮助计算当前时间的窗口索引位置
-* calculateWindowStart 方案： 用于在 currentWindow 内部逻辑中帮助计算当前时间对应的窗口的startTime
+
+* [calculateTimeIdx](#calculateTimeIdx(LeapArray)) 方法：用于currentWindow内部逻辑中帮助计算当前时间的窗口索引位置
+
+* [calculateWindowStart](#calculateWindowStart) 方案： 用于在 currentWindow 内部逻辑中帮助计算当前时间对应的窗口的 startTime
+
+  **calculateTimeIdx 计算到的位置的开始时间如果和 calculateWindowStart 不相等，那么证明需要滑动了，也就是更新当前索引位置的 start time 和 情况当前小窗口的计数。**
+
+  **至于请求是否会被拦截，那就使用所有小窗口的计数总和+当前请求的的数量和 limit做对比，如果大于 limit 则拦截。反之放行** 
 
 ```java
 public WindowWrap<T> currentWindow(long timeMillis) {
     if (timeMillis < 0) {
         return null;
     }
-		// 计算当前时间对应的窗口索引,方法解释再下文中有
+	// 计算当前时间对应的窗口索引,方法解释在下文中有
     int idx = calculateTimeIdx(timeMillis);
     // 计算当前时间对应的窗口的startTime
     long windowStart = calculateWindowStart(timeMillis);
@@ -337,7 +343,7 @@ public WindowWrap<T> currentWindow(long timeMillis) {
              * The update lock is conditional (tiny scope) and will take effect only when
              * bucket is deprecated, so in most cases it won't lead to performance loss.
              */
-             // 如果索引位置的小窗口已初始化，但是 old.starttime 小雨当前时间计算得到的startTime，说明当前时间对应的窗口应该更新了（也就是窗口应该滑动了）
+             // 如果索引位置的小窗口已初始化，但是 old.starttime 小于当前时间计算得到的startTime，说明当前时间对应的窗口应该更新了（也就是窗口应该滑动了）
             if (updateLock.tryLock()) {
                 try {
                     // Successfully get the update lock, now we reset the bucket.
@@ -361,7 +367,7 @@ public WindowWrap<T> currentWindow(long timeMillis) {
 
 ```
 
-LeapArray的
+### calculateTimeIdx(LeapArray)
 
 ```java
 // 计算当前时间对应的窗口索引
@@ -383,13 +389,17 @@ private int calculateTimeIdx(/*@Valid*/ long timeMillis) {
   // Calculate current index so we can map the timestamp to the leap array.
   return (int)(timeId % array.length());
 }
+```
 
+### calculateWindowStart
+
+```java
 // 计算当前时间对应的窗口的startTime
 protected long calculateWindowStart(/*@Valid*/ long timeMillis) {
   /**
-   * 如何知道一个小窗口的startTimeMillis呢 ？假如我们窗口总大小是 600ms,分了三个小窗口    
-   * windowLengthInMs = 200ms ， 我们可以先枚举一些例子：
-   * timeMillis=0 ； = 0 - 0 % 200 = 0 ，  它应该是放在 0 - 200 这个窗口中的
+     * 如何知道一个小窗口的startTimeMillis呢 ？假如我们窗口总大小是 600ms,分了三个小窗口    
+     * windowLengthInMs = 200ms ， 我们可以先枚举一些例子：
+   	 * timeMillis=0 ； = 0 - 0 % 200 = 0 ，  它应该是放在 0 - 200 这个窗口中的
 	 * timeMillis=111 ； = 111 - 111 % 200 = 0 ， 他也是放在 0 - 200 这个窗口中的
 	 * timeMillis=200 ； = 200 - 200 % 200 = 200 ， 他也是放在 200 - 400 这个窗口中的
  	 * timeMillis=600 ； = 600 - 600 % 200 = 600 ， 他也是放在 600 - 800 这个窗口中的
@@ -403,7 +413,7 @@ protected long calculateWindowStart(/*@Valid*/ long timeMillis) {
 }
 ```
 
-该算法还有一种实现方式，本质思想是转换概念，将原本问题的通过确定时间范围去进行次数限制。转换成线确定次数大小，然后再来进行时间限制。这种方式由于需要记录每一次请求的time 实现起来会更费内存一些，而上面一种实现方式消耗更多的是拆分的窗口数量的内存
+该算法还有一种实现方式，本质思想是转换概念，将原本问题的通过确定时间范围去进行次数限制。转换成先确定次数大小，然后再来进行时间限制。这种方式由于需要记录每一次请求的time 实现起来会更费内存一些，而上面一种实现方式消耗更多的是拆分的窗口数量的内存
 
 [滑动窗口算法（另一种实现方式）](滑动窗口算法.md)
 
@@ -427,74 +437,78 @@ public boolean canExecute(){
     	reture true;
   }
   count++
-	if(count > limit){
+  if(count > limit){
     return false;
   }
   return true;
 }
 ```
 
-**它的缺点：**简单易于实现确实很不错，不过也存在着一个明显的缺点：“时间零界点”问题，比如在 0-58秒的时候都没有收到请求，然后到了59秒的时候来了500个请求，然后下一个一分钟的开始的一秒又来了500个请求，这种场景就明显不符合我们一分钟内限流1000的要求了，因为这种情况很可能导致我们的系统崩溃（我们限流的设置是为了保护系统的处理能力是在它的承载范围之内）
+**它的缺点：**简单易于实现确实很不错，不过也存在着一个明显的缺点：“时间零界点”问题，比如在 0-58秒的时候都没有收到请求，然后到了59秒的时候来了500个请求，然后下一个一分钟的开始的一秒又来了501个请求，这种场景就明显不符合我们一分钟内限流1000的要求了，因为这种情况很可能导致我们的系统崩溃（我们限流的设置是为了保护系统的处理能力是在它的承载范围之内）
 
 ## 漏桶算法
 
 算法思想：当有请求到来时先放到木桶中，worker以固定的速度从木桶中取出请求进行相应。如果木桶已经满了，直接返回请求频率超限的错误码或者页面。
 
-漏桶算法能够强行限制数据的传输速率（流量整形）。
+**漏桶算法能够强行限制数据的传输速率（流量整形），能够达成流量平缓处理，缺点就是不能处理突发流量，会被强制限速。对有些业务场景的请求响应的使用体验会有影响**。
 
-<img src="assets/image-20220308192033981.png" alt="image-20220308192033981" style="zoom:50%;" />
+**适用场景：**
 
-适用场景：
+**流量最均匀的限流方式，一般用于流量“整形”，例如保护数据库的限流。先把对数据库的访问加入到木桶中，worker再以db能够承受的qps从木桶中取出请求，去访问数据库。不太适合电商抢购和微博出现热点事件等场景的限流（这种场景会有突发流量）。**
 
-流量最均匀的限流方式，一般用于流量“整形”，例如保护数据库的限流。先把对数据库的访问加入到木桶中，worker再以db能够承受的qps从木桶中取出请求，去访问数据库。不太适合电商抢购和微博出现热点事件等场景的限流（这种场景会有突发流量）。
+<img src="../../分布式/限流降级熔断/assets/image-20220308192033981.png" alt="image-20220308192033981" style="zoom:50%;" />
 
-go的代码：https://github.com/kevinyan815/gocookbook/issues/28
+**这种实现方式需要借助一个线程。来实现很恒定速率**
 
-java:
+<img src="../../Interview-questions/assets/image-20231024114619501.png" alt="image-20231024114619501" style="zoom:50%;" />
 
-```java
-@Slf4j
-public class LeakyBucketLimiter {
-    private ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(5);
- 
-    // 桶的容量
-    public int capacity = 10;
-    // 当前水量
-    public Atomic water = 0;
-    //水流速度/s
-    public int rate = 4;
-    // 最后一次加水时间
-    public long lastTime = System.currentTimeMillis();
- 
-    public void acquire() {
-        scheduledExecutorService.scheduleWithFixedDelay(() -> {
-            long now = System.currentTimeMillis();
-            //计算当前水量
-            water = Math.max(0, (int) (water - (now - lastTime) * rate /1000));
-            int permits = (int) (Math.random() * 8) + 1;
-            log.info("请求数：" + permits + "，当前桶余量：" + (capacity - water));
-            lastTime = now;
-            if (capacity - water < permits) {
-                // 若桶满,则拒绝
-                log.info("限流了");
-            } else {
-                // 还有容量
-                water += permits;
-                log.info("剩余容量=" + (capacity - water));
-            }
-        }, 0, 500, TimeUnit.MILLISECONDS);
-    }
- 
-    public static void main(String[] args) {
-        LeakyBucketLimiter limiter = new LeakyBucketLimiter();
-        limiter.acquire();
-    }
+![image-20231024114505576](../../Interview-questions/assets/image-20231024114505576.png)
+
+## 令牌桶算法
+
+和漏桶算法不同，令牌桶是为了在限制数据的**平均传输速率**的同时还允许某种程度的突发传输而设计的
+
+go的普通的令牌痛的实现：https://github.com/kevinyan815/gocookbook/issues/27
+
+```go
+type TokenBucket struct {
+   rate         int64 //固定的token放入速率, r/s
+   capacity     int64 //桶的容量
+   tokens       int64 //桶中当前token数量
+   lastTokenSec int64 //上次向桶中放令牌的时间的时间戳，单位为秒
+
+   lock sync.Mutex
+}
+
+func (bucket *TokenBucket) Take() bool {
+   bucket.lock.Lock()
+   defer bucket.lock.Unlock()
+
+   now := time.Now().Unix()
+   bucket.tokens = bucket.tokens + (now-bucket.lastTokenSec)*bucket.rate // 通过计算两次的时间差*token的放入速率获取已经添加的令牌数量
+   if bucket.tokens > bucket.capacity { // 保证添加的令牌没有超过限制
+      bucket.tokens = bucket.capacity
+   }
+   bucket.lastTokenSec = now
+   if bucket.tokens > 0 {
+      // 还有令牌，领取令牌
+      bucket.tokens--
+      return true
+   } else {
+      // 没有令牌,则拒绝
+      return false
+   }
+}
+
+func (bucket *TokenBucket) Init(rate, cap int64) {
+   bucket.rate = rate
+   bucket.capacity = cap
+   bucket.tokens = 0
+   bucket.lastTokenSec = time.Now().Unix()
 }
 ```
 
-注意如果考虑线程安全问题加锁处理/或则使用atomic然后通过自旋来处理并发问题
-
-java部分可以参考sentinel的漏桶算法的代码，sentinel支持的实现支持一定的等待时常
+java部分可以参考sentinel的漏桶算法的代码，sentinel支持的实现支持一定的等待时
 
 ```java
 /*
@@ -560,12 +574,12 @@ public class RateLimiterController implements TrafficShapingController {
         long costTime = Math.round(1.0 * (acquireCount) / count * 1000);
 
         // Expected pass time of this request.
-      	// 得到上一次发放令牌的时间+当前的时间
+      	// 得到上一次发放令牌的时间+当前请求数需要的令牌所需花费的时间
         long expectedTime = costTime + latestPassedTime.get();
-				// currentTime 如果大于 expectedTime 说明可以放行，窗口内的平均速率是满足 count定义的qps限制的
+        // currentTime 如果大于 expectedTime 说明可以能够产生这么多令牌，可以放行，窗口内的平均速率是满足 count定义的qps限制的
         if (expectedTime <= currentTime) {
             // Contention may exist here, but it's okay.
-            latestPassedTime.set(currentTime);
+            latestPassedTime.set(currentTime); // 更新最近一次获取令牌的时间，latestPassedTime 这个是一个 atomic变量保证多线程下的可见性
             return true;
         } else {
             // Calculate the time to wait.
@@ -594,51 +608,6 @@ public class RateLimiterController implements TrafficShapingController {
         return false;
     }
 
-}
-
-```
-
-## 令牌桶算法
-
-和漏桶算法不同，令牌桶是为了在限制数据的平均传输速率的同时还允许某种程度的突发传输而设计的
-
-go的普通的令牌痛的实现：https://github.com/kevinyan815/gocookbook/issues/27
-
-```go
-type TokenBucket struct {
-   rate         int64 //固定的token放入速率, r/s
-   capacity     int64 //桶的容量
-   tokens       int64 //桶中当前token数量
-   lastTokenSec int64 //上次向桶中放令牌的时间的时间戳，单位为秒
-
-   lock sync.Mutex
-}
-
-func (bucket *TokenBucket) Take() bool {
-   bucket.lock.Lock()
-   defer bucket.lock.Unlock()
-
-   now := time.Now().Unix()
-   bucket.tokens = bucket.tokens + (now-bucket.lastTokenSec)*bucket.rate // 先添加令牌
-   if bucket.tokens > bucket.capacity {
-      bucket.tokens = bucket.capacity
-   }
-   bucket.lastTokenSec = now
-   if bucket.tokens > 0 {
-      // 还有令牌，领取令牌
-      bucket.tokens--
-      return true
-   } else {
-      // 没有令牌,则拒绝
-      return false
-   }
-}
-
-func (bucket *TokenBucket) Init(rate, cap int64) {
-   bucket.rate = rate
-   bucket.capacity = cap
-   bucket.tokens = 0
-   bucket.lastTokenSec = time.Now().Unix()
 }
 ```
 

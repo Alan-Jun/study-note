@@ -239,7 +239,9 @@ public static void main(String[] args) {
 
 ### **2. 线程安全**
 
-String 不可变性，天生具备线程安全，可以在多个线程中安全地使用。不需要任何同步处理，因为作为参数在多个线程中使用，并会对原有的String产生什么影响（内存中的值不变，各线程中使用的是新的内存中的值，而这个参数的主体并没有任何变化）
+String 不可变性，天生线程安全，可以在多个线程中安全地使用。不需要任何同步处理，因为作为参数在多个线程中使用，并会对原有的String产生什么影响（内存中的值不变，各线程中使用的是新的内存中的值，而这个参数的主体并没有任何变化）
+
+**并发安全性问题需要满足：多进程/线程对同一块贡献内存做修改操作这样的条件下才可能存在并发安全问题。String 的内存区域设计成了不可变的内存区域自然不存在并发安全性问题（线程安全性问题）**
 
 ### **3. 高效**
 
@@ -470,6 +472,13 @@ switch 不支持 long，是因为 switch 的设计初衷是对那些只有少数
 
 [StackOverflow : Why can't your switch statement data type be long, Java?](https://stackoverflow.com/questions/2676210/why-cant-your-switch-statement-data-type-be-long-java)
 
+## i++ 和 ++i 的区别
+
+```
+a = i++; // a = i ; i=i+1; 也就是先赋值后+1
+a = ++i // i=i+1; a = i; 也就是先+1，后赋值
+```
+
 # 四、关键字
 
 ## final
@@ -591,7 +600,7 @@ public class OuterClass {
 
 ### **5. 静态导包**
 
-在使用静态变量和方法时不用再指明 ClassName，从而简化代码，但可读性大大降低。
+在使用静态变量和方法时不用再指明 ClassName，从而简化代码，**但可读性大大降低**。
 
 ```java
 import static com.xxx.ClassName.*

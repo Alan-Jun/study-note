@@ -2,6 +2,8 @@
 
 stamp  可以用来解决ABA问题（有了 stamp  就算最后的数据相同，我们也可以通过stamp 知道它是不同的值），同时还可以记录被修改了多少次
 
+使用样例 ： https://baijiahao.baidu.com/s?id=1648077822185803003&wfr=spider&for=pc
+
 # 基本结构代码
 
 ```java

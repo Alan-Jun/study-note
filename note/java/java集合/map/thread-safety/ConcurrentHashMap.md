@@ -643,7 +643,7 @@ public V get(Object key) {
 
 简单说一句，此方法的大部分内容都很简单，只有正好碰到扩容的情况，ForwardingNode.find(int h, Object k) 稍微复杂一些，不过在了解了数据迁移的过程后，这个也就不难了，所以限于篇幅这里也不展开说了。
 
-**因为只有在原来的table 该的相同位置的数据已经迁移完成，oldTable的`i`位置的数据都迁移nextTable中，oldTable的`i`位置才会替换成 ForwardingNode， ForwardingNode的find 是在 nextTable 中查询数据，所以查询是不需要锁的,基于数据volatile的可见性即可**
+**因为只有在原来的table 的相同位置的数据已经迁移完成，oldTable的`i`位置的数据都迁移nextTable中，oldTable的`i`位置才会替换成 ForwardingNode， ForwardingNode的find 是在 nextTable 中查询数据，所以查询是不需要锁的,基于数据volatile的可见性即可**
 
 **size 方法优化**
 

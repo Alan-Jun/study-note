@@ -4,7 +4,7 @@
 
   **计算机中很多地方（比如编程中）都需要一些保证原子性的实现，一个需要执行完所有的操作才有意义的操作集合，就可以实现成原子性的**
 
-- `Consistency `一致性：事务应该确保数据库状态从一个一致状态转变为另一个一致性状态
+- `Consistency `一致性：事务应该确保数据库状态从一个一致状态转变为另一个一致性状态，对应的状态查询请求要求是能够查询到变更之后的状态。
 
   计算机中很多地方（比如编程（多线程）中，cpu工作机制中（多指令并行）需要保证最后的结果是这些所有操作时候的最终结果…..）
   简单的例子：现在有6个人 每人有一个账号，他们之间会相互转账，这样就组成了一个小的数据系统，那么什么事一致性呢？这是个人定义的，比如这几个人账号的总金额不变，那就是一致的，反之不一致。 再比如 现在数据时分布式存储的，有一个数据在几个地方都保存了，那么任何时候这几个地方的数据都必须相同，这也是一致性。
@@ -132,7 +132,7 @@ public interface TransactionStatus extends TransactionExecution, SavepointManage
 | PROPAGATION_SUPPORTS  | 1. 在外围方法未开启事务的情况下，`Propagation.SUPPORTS`修饰的方法，以非事务的方式执行<br/>2. 在外围方法开启事务的情况下`Propagation.SUPPORTS`修饰的内部方法会加入到外围方法的事务中，所有`Propagation.SUPPORTS`修饰的内部方法和外围方法均属于同一事务，只要一个方法异常，整个事务均回滚<br/>也就是说完全以外围方法为主 |
 | PROPAGATION_MANDATORY | 1.  如果当前没有事务，就抛出异常。<br/>2.  同上              |
 
-* 第二类：被这一类修饰的方法不管外围方法是否有事务，都开启自己的独立的事务，且内部方法之间、内部方法和外部方法事务均相互独立，互不干扰。
+* 第二类：被这一类修饰的方法不管外围方法是否有事务，都以自己内部的配置来处理事务，且内部方法之间、内部方法和外部方法事务均相互独立，互不干扰。
 
 | 事务传播行为类型          | 说明                                                         |
 | ------------------------- | ------------------------------------------------------------ |
@@ -148,6 +148,86 @@ public interface TransactionStatus extends TransactionExecution, SavepointManage
 **事务的传播行为，主要看内层方法的事务传播行为是什么样的，它决定了怎么去传播**
 
 **下面我们主要看一下每一类的第一种类型的详细介绍，别的都相似，可以自己去测试**
+
+### 实现原理
+
+调用过程中通过ThreadLocal 管理事务状态信息。
+
+> try{
+> 		w1. 创建数据库链接 connection，修改autocommit = false,设置事务状态信息 TransactionInfo.newTransaction=true，以及其他的事务信息，都会存在 ThreadLocal 中... 
+> 		w2. 执行对应的业务逻辑，sql等
+>
+> ​		如果其中调用了内部一个申明了事务的方法@Transactional 的方法 
+> ​		内部方法：{
+> ​	 			try{
+>
+> ​					i1, **判断 threadLocal 中是否有 connection ，如果有证明外层方法有事务，如果没有证明外层没有事务**。判断本方法配					置的事务传播行为:
+>
+> ​							**第一类 融入外层事务**：**设置事务状态信息 TransactionInfo.newTransaction=false， 记录外部事物的信息，							状态暂存，在内部执行完成之后，需要给外部threadlocal 数据做还原**
+>
+> ​							1, PROPAGATION_REQUIRED : 如果外层开启了事务，不会创建 connection，融入外层事务；**如果外层没有开启							事务，执行w1的逻辑，但是注意newTransaction=false，生成自己内部的 事务管理相关信息。**
+>
+> ​							2, PROPAGATION_SUPPORTS : 如果外层开启了事务，不会创建 connection，融入外层事务; 如果外层没有开启事							务，还是以不事务的方式执行
+>
+> ​							3, PROPAGATION_MANDATORY : 如果外层开启了事务，不会创建 connection，融入外层事务;如果外层没有开启							事务，抛出异常
+>
+> ​							**第二类 以自己为主事务为主，和外层事务无关**： **记外部事务的信息，状态暂存，在内部执行完成之后，需要给外							部threadlocal 数据做还原**
+>
+> ​							4, PROPAGATION_REQUIRES_NEW : 不管外部是否开启，都会执行 w1 的逻辑， 设置 newTransaction=true，这							样，内层事务就是一个独立的新事务，和外层事务隔离开。
+>
+> ​							5, PROPAGATION_NOT_SUPPORTED : 不管外层是否开启事务，都以非事务模式执行逻辑。
+>
+> ​							6, PROPAGATION_NEVER : 以非事务方式执行, 如果外围方法存在事务，则抛出异常。
+>
+> ​							**第三类：** 
+>
+> ​							7, PROPAGATION_NESTED : 如果外围方法存在事务，`Propagation.NESTED`修饰的内部方法属于外部事务的子							事务，外围主事务回滚，子事务一定回滚，而内部子事务可以单独回滚而不影响外围主事务和其他子							事务（前提是单独try-catch这个子事务,让外部的catch 逻辑捕获不到这个异常，且不设置
+>
+> ​							`TransactionAspectSupport.currentTransactionStatus().setRollbackOnly(); `）<br/>
+>
+> ​							如果外围方法没有事务，则执行与PROPAGATION_REQUIRED类似的效果。
+>
+> ​					i2, 执行对应的业务逻辑，sql等
+>
+> 
+>
+> ​	 			}catch{
+>
+> ​					**如果发生异常:** 
+>
+> ​					**第一类：还原外部事物的 threadlocal 中的事务信息，标记需要回滚，抛出异常，外部执行回滚操作**
+>
+> ​					**第二类：**
+>
+> ​					PROPAGATION_REQUIRES_NEW : 内外独立，所以内部单独回滚自己内部的事务,  还原外部事物的 threadlocal 中的					事务信息即可；
+>
+> ​					PROPAGATION_NOT_SUPPORTED : 内部以非事务方式执行，也就是说这里什么也不许需要做。还原外部事物的 					threadlocal 中的事务信息即可；
+>
+> ​					PROPAGATION_NEVER : 以非事务方式执行, 如果外围方法存在事务，则抛出异常。也就是说这里什么也不许需要做。外					部也不存在事务，因为如果存在事务在之前就抛出异常给外部了
+>
+> ​					**第三类**
+>
+> ​					PROPAGATION_NESTED :  回滚事务，然后将异常向外抛出； 还原外部事物的 threadlocal 中的事务信息（如果外部存					在事务，那么将内部的 conection 给绑定到外部事务信息的内层的事务链接管理列表中。如果外层没有则什么都不					做。）							
+>
+> ​					return;
+>
+> ​				 }
+>
+> ​				**执行完之后：判断 TransactionInfo.newTransaction= true  判断 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly() 如果是 true, 回滚所有事务（当前事务以及内部的 PROPAGATION_NESTED 标记的子事务 ），如果不是 则提交事务。。（第一类融入的。设置这个值未false.也就				是事务的提交会交还给外部事务管理）**
+>
+> ​				**还原外部事物的 threadlocal 中的事务信息。需要注意的是如果 是 PROPAGATION_NESTED 那么那么将内部的 				conection 给绑定到外部事务信息的内层的事务链接管理列表中, 这样当外层发现异常的时候，可以完成内外所有事务的回				滚**
+>
+> ​			}
+>
+> }catch {
+>
+> 
+>
+> }
+>
+> **TransactionInfo.newTransaction= true , 判断 TransactionAspectSupport.currentTransactionStatus().setRollbackOnly() 如果是 true, 回滚所有事务（当前事务以及内部的 PROPAGATION_NESTED 标记的子事务 ），如果不是 则提交事务。**
+
+
 
 ### 3.2.1 PROPAGATION_REQUIRED
 

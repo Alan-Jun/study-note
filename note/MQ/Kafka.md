@@ -11,7 +11,7 @@
 
 Apache Kafka 是一种分布式的，基于发布/订阅的消息系统，由Scala编写而成的，它具备快速，可扩展，可持久化的特点，Kafka有着下面这些特性，让其受到越来越到的开发人员的青睐
 
-* 近乎实时性的消息处理能力。即使面对海量消息也能高效的存储以及查询消息（后面会解释是怎么设计实现的），Kakfka 将消息包存在磁盘中，在其设计中并不惧怕磁盘操作。他会以顺序读写的方式访问持久化到磁盘（可以利用到操作系统的Page cache 功能加速磁盘的读写）从而避免的读写磁盘导致的性能瓶颈
+* 近乎实时性的消息处理能力。即使面对海量消息也能高效的存储以及查询消息（后面会解释是怎么设计实现的），Kakfka 将消息保存在磁盘中，在其设计中并不惧怕磁盘操作。他会以顺序读写的方式访问持久化到磁盘（可以利用到操作系统的Page cache 功能加速磁盘的读写）从而避免的读写磁盘导致的性能瓶颈
 * Kafka 支持批量的读写消息，并且会对消息进行批量压缩，提高了网络利用率
 * Kafka支持分区（partition）消息，保证分区中的消息是有序的，而分区之间可以并发操作，这样提高了Kafka的并发能力
 * 并且分区（partition）是支持在线水平扩展的
@@ -80,7 +80,8 @@ partition的 sharding  也是在发送端控制的，如果有顺序性的要求
 
 ### 发送顺序消息的时候怎么保证sharding 尽量均匀
 
-我们知道如果我们简单的使用类似 订单id来做分区控制，还是可以的，但是有的场景如果我们使用的是用户id,这个就回存在热点问题，有的用户炒作频繁，如果这些用户的数据简单的通过uid取分区就回导致某一些分区的数据量要大很多，怎么解决呢？在分区的时候增加一些新的业务字段作为条件参与分区的选择
+1. 我们知道如果我们简单的使用类似 订单id来做分区控制，还是可以的，但是有的场景如果我们使用的是用户id,这个就会存在热点问题，有的用户操作频繁，如果这些用户的数据简单的通过uid取分区就回导致某一些分区的数据量要大很多，怎么解决呢？在分区的时候增加一些新的业务字段作为条件参与分区的选择
+2. 选择一个散列性好的hash算法
 
 ## consumer
 
@@ -96,21 +97,13 @@ partition的 sharding  也是在发送端控制的，如果有顺序性的要求
 
 我这边的一种方式是，对于有顺序的消费场景，可以让这个顺序场景的几个消息的处理有序，比如一阶段落数据1，二阶段处理的时候查询一阶段有没有完成，如果没有完成就直接失败，同理如果第三阶段
 
-这样处理失败的阶段直接重新发回kafka，让后续重试，这样可以不阻碍流程，
-
-其次还可以采取在内存中新建一个队列对这类数据先做重试处理，多次重试（一般2-3次）失败就直接告警，人工介入。处理这类数据。这里会遇到一个问题队列大小是多大，队列满了数据怎么处理的问题，这个问题处理可以直接丢到kafka中，因为我们的partition是直接和相同的consumer绑定的可以继续保证顺序
-
-但是这会遇到一个问题那就是：内存是在机器出问题的时候会丢失的，可以怎么做呢？在放入内存队列前写一条日志，操作成功再写一条日志，机器down机我们是可以感知到的，到时候通过日志去对丢失的数据做恢复即可
+这样处理失败的阶段直接重新发回kafka，让后续重试，这样可以不阻碍流程；或者记录下这些消息，然后使用定时任务去做补偿。
 
 ### 非顺序消费怎么保证性能的前提去处理消费失败问题
 
-**非顺序消费**其实也类似，不过非顺序消费场景性能可以做到更快，因为可以异步多线程去消费多个消息。最后做一次offset的提交，这会遇到的问题是什么呢？比如你消费100条在多线程中处理。中间有失败的怎么处理呢？可以采用刚才顺序消费中的方式，我们在增加一个线程池，处理失败的丢入这个线程池，让他们在里面做重试，同理需要落log,防止内存丢失问题，线程池如果满了就丢会Kafka。让offset能够顺利提交，然后不影响消费能力
-
-
+**非顺序消费**其实也类似，不过非顺序消费场景性能可以做到更快，因为可以异步多线程去消费多个消息。最后做一次offset的提交，这会遇到的问题是什么呢？比如你消费100条在多线程中处理。中间有失败的怎么处理呢？可以采用刚才顺序消费中的方式失败发回kafak或者找个地方存起来使用定时任务去做补偿。
 
 **如果业务允许消息丢失，那么就不需要采取先落日志的策略，同时broker端也不必采取 ISR的ack可靠性策略**
-
-
 
 https://www.cnblogs.com/buttercup/p/14208062.html
 
@@ -132,7 +125,7 @@ topic中的 partition 不管是”独占“还是“广播”，partition 都是
 >
 > **Range**
 >
-> 这个是默认的策略。大概意思就是对分区进行排序，排序越靠前的能够分配到更多的分区。
+> 这个是默认的策略。大概意思就是对消费者进行排序，排序越靠前的能够分配到更多的分区。
 >
 > 比如有3个分区，消费者A排序更靠前，所以能够分配到P0\P1两个分区，消费者B就只能分配到一个P2。
 >
@@ -241,11 +234,12 @@ topic中的 partition 不管是”独占“还是“广播”，partition 都是
 >
 > 
 >
-> 
 
-然后 kafka 2.4 版本中 新增了 Incremental Cooperative Rebalance 协议 
+**rebalenace 的详细过程**
 
-详情：https://cloud.tencent.com/developer/article/1832883
+**然后 kafka 2.4 版本中 新增了 Incremental Cooperative Rebalance 协议** 
+
+**详情：https://cloud.tencent.com/developer/article/1832883**
 
 > GroupCoordinator 中还维护了分区和consumer group 的消费关系。记录了consumer消费的offset （cunsumer 一次poll() 消费之后需要提交数据给到 GroupCoordinator ）
 
@@ -258,7 +252,6 @@ topic中的 partition 不管是”独占“还是“广播”，partition 都是
     ```
     kafka0.10.1之前的版本，会在轮询消息或者提交偏移量时发送心跳 现在大家使用的版本都是有独立线程来发送心跳的。
     
-    
     heartbeat.interval.ms : 3s
     
     The expected time between heartbeats to the consumer coordinator when using Kafka's group management facilities. Heartbeats are used to ensure that the consumer's session stays active and to facilitate rebalancing when new consumers join or leave the group. The value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.
@@ -266,17 +259,17 @@ topic中的 partition 不管是”独占“还是“广播”，partition 都是
     Kafka 的消费组管理的时候消费者协调器的心跳之间的预期时间。 心跳用于确保消费者的会话保持活动状态，并在新消费者加入或离开组时促进重新平衡。 该值必须设置为低于 <code>session.timeout.ms</code>，但通常不应设置为高于该值的 1/3。 它可以调整得更低，以控制正常重新平衡的预期时间。
     
     
-    
     session.timeout.ms : 10s
     
     The timeout used to detect consumer failures when using Kafka's group management facility. The consumer sends periodic heartbeats to indicate its liveness to the broker. If no heartbeats are received by the broker before the expiration of this session timeout, then the broker will remove this consumer from the group and initiate a rebalance. Note that the value must be in the allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> and <code>group.max.session.timeout.ms</code>.
     
-    Kafka 的消费组管理的时候用于检测消费者故障的超时。 消费者定期发送心跳以向代理指示其活跃度。 如果在此会话超时到期之前代理没有收到心跳，则代理将从组中删除此消费者并启动重新平衡。 请注意，该值必须在代理配置中由 <code>group.min.session.timeout.ms</code> 和 <code>group.max.session.timeout.ms</code> 配置的允许范围内 .
+    Kafka 的消费组管理的时候用于检测消费者故障的超时。 消费者定期发送心跳以向代理指示其活跃度。 如果在此会话超时到期之前代理没有收到心跳，则代理将从组中删除此消费者并启动rebalance。 请注意，该值必须在代理配置中由 <code>group.min.session.timeout.ms</code> 和 <code>group.max.session.timeout.ms</code> 配置的允许范围内 .表示 consumer 向 broker 发送心跳的超时时间。例如 session.timeout.ms = 180000 表示在最长 180 秒内 broker 没收到 consumer 的心跳，那么 broker 就认为该 consumer 死亡了，会启动 rebalance。
+    
     
     
     
     ```
-
+    
   - 当 consumer无法在指定的时间内完成消息的处理，那么coordinator就认为该 consumer已经崩溃，从而引发新一轮 rebalance
 
     ```
@@ -288,7 +281,7 @@ topic中的 partition 不管是”独占“还是“广播”，partition 都是
     
     意思是：消费组管理的时候，两次调用 poll() 之间的最大延迟。 这为消费者在获取更多记录之前可以空闲的时间设置了上限。 **如果在此超时到期之前未调用 poll()，则消费者被视为失败并且组将重新平衡以将分区重新分配给另一个成员。**
     ```
-
+  
     
 
 - 订阅`topic(主题)`的`partition(分区)`数量发生变更,比如使用命令行脚本增加了订阅 topic 的分区数
@@ -322,7 +315,7 @@ kafka 会启动一个后台压缩线程，定期将 key 相同的 message 进行
 
 ## AR,ISR,OSR,HW,LEO
 
-leader 副本负责维护和跟踪 ISR 集合中所有 follower 副本的滞后状态， 当 follower 副本落后 太多或失效时， leader副本会把它从ISR集合中剔除。 如果OSR集合中有follower副本“追上’“了 leader副本，那么 leader副本会把它从 OSR集合转移至 ISR集合。 默认情况下， 当 leader副本发生故障时，只有在 ISR集合中的副本才有资格被选举为新的 leader， 而在 OSR集合中的副 本则没有任何机会(不过这个原则也可以通过修改相应的参数配置来改变) 。
+leader 副本负责维护和跟踪 ISR 集合中所有 follower 副本的滞后状态， 当 follower 副本落后 太多或失效时， leader副本会把它从ISR集合中剔除。 如果OSR集合中有follower副本“追上’“了 leader副本，那么 leader副本会把它从 OSR集合转移至 ISR集合。 默认情况下， 当 leader副本发生故障时，只有在 ISR集合中的副本才有资格被选举为新的 leader， 而在 OSR集合中的副本则没有任何机会(不过这个原则也可以通过修改相应的参数配置来改变) 。
 
 ISR 与 HW 和 LEO 也有紧密的关系 。 HW 是 High Watermark 的缩写，俗称高水位，它标识 了一个特定的消息偏移量(offset)，消费者只能拉取到这个 offset之前的消息。
 
@@ -340,7 +333,7 @@ LEO 是 Log End Offset 的缩写，它标识当前日志文件中下一条待写
 
 
 
-<img src="../../../../Library/Application Support/typora-user-images/Screenshot 2023-07-17 at 16.32.08.png" alt="Screenshot 2023-07-17 at 16.32.08" style="zoom:50%;" />
+<img src="assets/Screenshot 2023-07-17 at 16.32.08.png" alt="Screenshot 2023-07-17 at 16.32.08" style="zoom:50%;" />
 
 在消息写入 leader 副本之后， follower 副本会发送拉取请求来拉取消息 3 和消息 4 以进行消息同步。
 
@@ -350,9 +343,9 @@ LEO 是 Log End Offset 的缩写，它标识当前日志文件中下一条待写
 
 写入消息(情形的如图 1-8 所示 ，所有的副本都成功 写入 了消息 3 和消息 4，整个分区的 HW 和 LEO 都变为 5，因此消费者可以消费到 offset为 4 的消息了 。
 
-<img src="../../../../Library/Application Support/typora-user-images/Screenshot 2023-07-17 at 16.33.27.png" alt="Screenshot 2023-07-17 at 16.33.27" style="zoom:50%;" />
+<img src="assets/Screenshot 2023-07-17 at 16.33.27.png" alt="Screenshot 2023-07-17 at 16.33.27" style="zoom:50%;" />
 
-由此可见， Kafka 的复制机制既不是完全的同步复制，也不是单纯的异步复制。事实上， 同步复制要求所有能工作的 folower 副本都复制完，这条消息才会被确认为已成功提交，这种复制方式极大地影响了性能。而在异步复制方式下， follower 副本异步地从 leader 副本中复制数据，数据只要被 leader 副本写入就被认为已经成功提交。在这种情况下，如果 follower 副本都 还没有复制完而落后于 leader 副本，突然 leader 副本着机，则会造成数据丢失。 Kafka 使用的这种 ISR 的方式则有效地权衡了数据可靠性和性能之间的关系。
+由此可见， Kafka 的复制机制既不是完全的同步复制，也不是单纯的异步复制。事实上， 同步复制要求所有能工作的 folower 副本都复制完，这条消息才会被确认为已成功提交，这种复制方式极大地影响了性能。而在异步复制方式下， follower 副本异步地从 leader 副本中复制数据，数据只要被 leader 副本写入就被认为已经成功提交。在这种情况下，如果 follower 副本都还没有复制完而落后于 leader 副本，突然 leader 副本着机，则会造成数据丢失。 Kafka 使用的这种 ISR 的方式则有效地权衡了数据消息的可靠性和性能之间的关系。
 
 
 
@@ -370,7 +363,7 @@ acks 参数配置：
 
 1. 0：producer 不等待 broker 的 ack，这一操作提供了一个最低的延迟，broker 一接收到还没有写入磁盘就已经返回，当 broker 故障时有可能丢失数据；
 2. 1：producer 等待 broker 的 ack，partition 的 leader 落盘成功后返回 ack，不管follower是否同步成功。如果在 follower 同步成功之前 leader 故障，那么将会丢失数据
-3. -1（all）：producer 等待 broker 的 ack，partition 的 leader 和 follower （ISRL里的follower，不是全部的follower）全部落盘成功后才 返回 ack。但是如果在 follower 同步完成后，broker 发送 ack 之前，leader 发生故障，那么会造成数据重复 （这个功能需要partition具有多副本，如果只有一台机器，其实和1是一样的）
+3. -1（all）：producer 等待 broker 的 ack，partition 的 leader 和 follower （ISR里的follower，不是全部的follower）全部落盘成功后才返回 ack。但是如果在 follower 同步完成后，broker 发送 ack 之前，leader 发生故障，那么会造成数据重复 （这个功能需要partition具有多副本，如果只有一台机器，其实和1是一样的）
 
 page cache 写入，因为通常是不会采用同步刷盘的，所以存在丢失的风险（**存在副本的情况下不可能都丢，所以我们通常需要最少2个副本，并且最好部署在不同的物理机上**），其实就算采用同步刷盘也有丢失风险，因为page cache 刷的数据是写到硬盘的一个自带的缓冲区中，并不是说直接刷到硬盘中
 
@@ -385,6 +378,10 @@ page cache 写入，因为通常是不会采用同步刷盘的，所以存在丢
 `enable.auto.commit=false`，设置为手动提交。还没有提交前。机器挂了也可能重复消费，但是不会丢失消息，其中有两种提交方式
 
 * 同步提交：可靠性提升，缺点会导致消费性能下降
+  * 消费一条提交一条
+  * 批量消费并提交多条
+  * .....
+
 * 异步提交：不保证一定提交，问题也不大，最多就是重复消费消息的问题
 
 还有一个参数我们可能也需要考虑进去的：
@@ -397,7 +394,7 @@ page cache 写入，因为通常是不会采用同步刷盘的，所以存在丢
 
 关于压缩，除了在生产者消费者介绍中的描述到的之外，总结下来就是
 
-**Producer 端压缩、Broker 端保持、Consumer 端解压缩。**
+**Producer 端压缩、Broker 端保持、Consumer 端解压缩(会根据压缩的消息中的标识确定使用什么方法解压)。**
 
 https://blog.csdn.net/qq_41049126/article/details/111247370
 
@@ -406,6 +403,11 @@ https://blog.csdn.net/qq_41049126/article/details/111247370
 kakfa 可以指定对 key , value 所使用的序列化方法 ,需要注意的是 provider，consumer 要配置相同的序列化算法，不然会导致无法解析
 
 默认的是：org.apache.kafka.common.serialization.StringSerializer
+
+```
+key.serializer:org.apache.kafka.common.serialization.StringSerializer
+value.serializer:org.apache.kafka.common.serialization.StringSerializer
+```
 
 # 线程模型
 
@@ -526,4 +528,4 @@ https://blog.csdn.net/shockang/article/details/116424217
 
 https://mp.weixin.qq.com/s/68XX9qnEvDTCOw8gYLNBxQ
 
-实际的**通过索引**查找消息过程是先通过offset找到索引所在的文件，然后在稀疏索引**通过二分法**找到离目标最近的索引offset，再顺序遍历消息文件找到目标文件。这波操作时间复杂度为`O(log2n)+O(m)`,n是索引文件里索引的个数，m为稀疏程度。
+实际的**通过索引**查找消息过程是先通过offset找到索引所在的文件，然后在**<u>稀疏索引</u>通过二分法**找到离目标最近的索引offset，再顺序遍历消息文件找到目标文件。这波操作时间复杂度为`O(log2n)+O(m)`,n是索引文件里索引的个数，m为稀疏程度。

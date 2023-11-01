@@ -54,19 +54,91 @@ spring-expression：Spring 表达式语言模块
 
 # BeanFactory 与 FactoryBean
 
-BeanFactory 是IoC 底层容器 ，而applicationContext  是具备BeanFactory 应用特性的超集，实现了BeanFactory 接口，但是BeanFactory 的功能 采取了组合BeanFactory 其他实现类的方式来实现，作为超级它提供了
+## BeanFactory
 
-* 面向切面（AOP）
-* 配置元信息（Configuration Metadata）
-* 资源管理（Resources）
-* 事件（Events）
-* 国际化（i18n）
-* 注解（Annotations）
-* Environment 抽象（Environment Abstraction）
+BeanFactory，以Factory结尾，表示它是一个工厂(接口)， 它负责生产和管理bean的一个工厂。在Spring中，BeanFactory是工厂的顶层接口，也是IOC容器的核心接口，因此BeanFactory中定义了**管理Bean的通用方法**，如 **getBean** 和 **containsBean** 等，它的职责包括：实例化、定位、配置应用程序中的对象及建立这些对象间的依赖。BeanFactory只是个接口，并不是IOC容器的具体实现，所以Spring容器给出了很多种实现，如 **DefaultListableBeanFactory**、**XmlBeanFactory**、**ApplicationContext**等，其中XmlBeanFactory就是常用的一个，该实现将以XML方式描述组成应用的对象及对象间的依赖关系
 
-FactoryBean 是创建Bean 的一种方式，帮助实现复杂的初始化逻辑，它更像是一种对配置bean之外的功能扩展（SPI)
+**他的使用场景：**
 
-> https://blog.csdn.net/zknxx/article/details/79572387
+1、从Ioc容器中获取Bean(byName or byType)
+
+2、检索Ioc容器中是否包含指定的Bean 
+
+3、判断Bean是否为单例
+
+```
+public interface BeanFactory {
+	//对FactoryBean的转义定义，因为如果使用bean的名字检索FactoryBean得到的对象是工厂生成的对象，
+	//如果需要得到工厂本身，需要转义
+	String FACTORY_BEAN_PREFIX = "&";
+
+	//根据bean的名字，获取在IOC容器中得到bean实例
+	Object getBean(String name) throws BeansException;
+
+	//根据bean的名字和Class类型来得到bean实例，增加了类型安全验证机制。
+	<T> T getBean(String name, @Nullable Class<T> requiredType) throws BeansException;
+
+	Object getBean(String name, Object... args) throws BeansException;
+
+	<T> T getBean(Class<T> requiredType) throws BeansException;
+
+	<T> T getBean(Class<T> requiredType, Object... args) throws BeansException;
+
+	//提供对bean的检索，看看是否在IOC容器有这个名字的bean
+	boolean containsBean(String name);
+
+	//根据bean名字得到bean实例，并同时判断这个bean是不是单例
+	boolean isSingleton(String name) throws NoSuchBeanDefinitionException;
+
+	boolean isPrototype(String name) throws NoSuchBeanDefinitionException;
+
+	boolean isTypeMatch(String name, ResolvableType typeToMatch) throws NoSuchBeanDefinitionException;
+
+	boolean isTypeMatch(String name, @Nullable Class<?> typeToMatch) throws NoSuchBeanDefinitionException;
+
+	//得到bean实例的Class类型
+	@Nullable
+	Class<?> getType(String name) throws NoSuchBeanDefinitionException;
+
+	//得到bean的别名，如果根据别名检索，那么其原名也会被检索出来
+	String[] getAliases(String name);
+}
+```
+
+
+
+## FactoryBean
+
+https://zhuanlan.zhihu.com/p/278318209
+
+首先FactoryBean是一个Bean，但又不仅仅是一个Bean，这样听起来矛盾，但为啥又这样说呢？其实在Spring中，所有的Bean都是由BeanFactory（也就是IOC容器）来进行管理的。但对FactoryBean而言，**这个FactoryBean不是简单的Bean，而是一个能生产或者修饰对象生成的工厂Bean,它的实现与设计模式中的工厂模式和修饰器模式类似**
+
+### 为什么会有FactoryBean
+
+一般情况下，Spring通过反射机制利用的class属性指定实现类实例化Bean。至于为什么会有FactoryBean？原因有两个：
+
+1、 在某些情况下，实例化Bean过程比较复杂，如果按照传统的方式，则需要在其中提供大量的配置信息。配置方式的灵活性是受限的，这时采用编码的方式可能会得到一个简单的方案。Spring为此提供了一个org.springframework.bean.factory.FactoryBean的工厂类接口，用户可以通过实现该接口定制实例化Bean的逻辑。FactoryBean接口对于Spring框架来说占用重要的地位，Spring自身就提供了70多个FactoryBean的实现。它们隐藏了实例化一些复杂Bean的细节，给上层应用带来了便利。
+
+2、 由于第三方库不能直接注册到spring容器，于是可以实现org.springframework.bean.factory.FactoryBean接口，然后给出自己对象的实例化代码即可。
+
+```
+public interface FactoryBean<T> {
+	//从工厂中获取bean【这个方法是FactoryBean的核心】
+	@Nullable
+	T getObject() throws Exception;
+	
+	//获取Bean工厂创建的对象的类型【注意这个方法主要作用是：该方法返回的类型是在ioc容器中getbean所匹配的类型】
+	@Nullable
+	Class<?> getObjectType();
+	
+	//Bean工厂创建的对象是否是单例模式
+	default boolean isSingleton() {
+		return true;
+	}
+}
+```
+
+
 
 # ObjectFactory
 

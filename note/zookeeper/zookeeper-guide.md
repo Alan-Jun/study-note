@@ -1,5 +1,7 @@
 # 简介
 
+ZK 是CP系统 ：写强一致性，读顺序一致性 https://blog.csdn.net/weixin_43854800/article/details/127983835
+
 ZooKeeper: A Distributed Coordination Service for Distributed Applications
 
 ZooKeeper主要**服务于分布式系统**，可以用ZooKeeper来做：统一配置管理、统一命名服务、分布式锁、集群管理。

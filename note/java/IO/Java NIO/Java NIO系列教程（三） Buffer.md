@@ -107,7 +107,6 @@ Java NIO 有以下Buffer类型
 - LongBuffer
 - ShortBuffer
 
-p<>
 如你所见，这些Buffer类型代表了不同的数据类型。换句话说，就是可以通过char，short，int，long，float 或 double类型来操作缓冲区中的字节。
 
 MappedByteBuffer 有些特别，在涉及它的专门章节中再讲。
@@ -205,7 +204,7 @@ buffer.reset();  //set position back to mark.
 
 ### equals()与compareTo()方法
 
-可以使用equals()和compareTo()方法两个Buffer。
+可以使用equals()和compareTo()方法比较两个Buffer。
 
 #### equals()
 
