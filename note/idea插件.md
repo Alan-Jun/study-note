@@ -1,1 +1,0 @@
-![image-20200922192743254](/Users/ypp/Library/Application Support/typora-user-images/image-20200922192743254.png)
