@@ -47,7 +47,7 @@ partition在逻辑上对应了一个log，当生产者的消息写入到Kafka的
 
 > **partition日志会存储在 <topic_name>_<partitionId> 目录下，然后再是会按照每个文件1G的大小分segment，每个segment做了一个稀疏索引文件**
 >
-> ps: page cache 中的一个页的大小一般是4k/8k
+> ps: page cache 中的一个页的大小一般是4k/8k，page cache 会有很多页
 
 消息在broker 端也会涉及到消息压缩，目前支持的压缩方式有
 
@@ -143,7 +143,7 @@ topic中的 partition 不管是”独占“还是“广播”，partition 都是
 >
 > 也就是我们常说的轮询了，这个就比较简单了，不画图你也能很容易理解。
 >
-> 这个会根据所有的主题进行轮询分配，不会出现Range那种主题越多可能导致分区分配不均衡的问题。
+> 这个会根据所有的partition进行轮询分配，不会出现Range那种主题越多可能导致分区分配不均衡的问题。
 >
 > P0->A，P1->B，P1->A。。。以此类推
 >
@@ -464,7 +464,7 @@ IO线程模型：Reactor 主从多线程的模式
 
 |                             |                                                              |                               |
 | --------------------------- | ------------------------------------------------------------ | ----------------------------- |
-| isteners                    | 监听器配置,可以配置多个,配置了几个就会创建几个Acceptor       | listeners = PLAINTEXT://:9092 |
+| listeners                   | 监听器配置,可以配置多个,配置了几个就会创建几个Acceptor       | listeners = PLAINTEXT://:9092 |
 | num.network.threads         | 单个Acceptor创建Processor处理器的线程个数（处理链接之后的读写IO事件/ 控制命令） | 3                             |
 | socket.send.buffer.bytes    | SocketServer的 SO_SNDBUF 缓冲区。如果值为 -1，将使用操作系统默认值。 | 102400 (100 kibibytes)        |
 | socket.receive.buffer.bytes | SocketServer sockets 的SO_RCVBUF 缓冲区，如果值为 -1，将使用操作系统默认值 | 102400 (100 kibibytes)        |

@@ -276,3 +276,18 @@ TIME-wait 是为了等待网络中残余的数据（有可能会有），处于T
 https://blog.csdn.net/lianhunqianr1/article/details/118919500
 
 https://blog.csdn.net/baidu_38432732/article/details/81289274
+
+## 四次挥手阶段可能引起的IO问题
+
+当服务器保持了⼤量的**TIME_WAIT**和**CLOSE_WAIT**状态的连接，就需要格外注意⼀下，主动关闭的一方会经过**TIME_WAIT**阶段，被动关闭的一方会经过**CLOSE_WAIT**阶段
+
+**因为在Linux中进程每打开⼀个⽂件（linux下⼀切皆⽂件，包括socket），都会消耗⼀点的内存资源，所以Linux在多个位置都限制了可打开文件描述符的数量，包括系统级，用户级，进程级。**
+
+系统级：当前系统可打开的最⼤数量，通过fs.file-max参数可修改
+
+⽤户级：指定⽤户可打开的最⼤数量，修改/etc/security/limits.conf
+
+进程级：单个进程可打开的最⼤数量，通过fs.nr_open参数可修改
+
+⼀旦文件描述符达到上限，新的请求就无法被处理了，接着就是⼤量**Too Many Open Files异常**
+

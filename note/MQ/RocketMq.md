@@ -215,7 +215,7 @@ RocketMQ事务消息（Transactional Message）是指应用本地事务和发送
 
 **定时消息会暂存在名为SCHEDULE_TOPIC_XXXX的topic中，并根据delayTimeLevel存入特定的queue，queueId = delayTimeLevel – 1，即一个queue只存相同延迟的消息，保证具有相同发送延迟的消息能够顺序消费。broker会调度地消费SCHEDULE_TOPIC_XXXX，将消息写入真实的topic。消息没到时间不会被加入到正常队列中，也就不会被消费者消费，以此来实现延迟消息。**
 
-**需要注意的是，定时消息会在第一次写入和调度写入真实topic时都会计数，因此发送数量、tps都会变高。**
+**需要注意的是，定时消息会在第一次写入和调度写入到真实的topic时都会计数，因此发送数量、tps都会变高。**
 
 > https://blog.csdn.net/qq_32099833/article/details/120247549
 >
@@ -520,7 +520,7 @@ Apache RocketMQ在4.3.0版中已经支持分布式事务消息，这里RocketMQ�
 
 ![image-20220417130629652](assets/image-20220417130629652.png)
 
-RocketMQ的具体实现策略是：写入的如果事务消息，对消息的Topic和Queue等属性进行替换，同时将原来的Topic和Queue信息存储到消息的属性中，正因为消息topic被替换，故消息并不会转发到该原主题的消息消费队列，消费者无法感知消息的存在，不会消费。其实改变消息topic是RocketMQ的常用“套路”，回想一下延时消息的实现机制。
+RocketMQ的具体实现策略是：写入的如果是事务消息，对消息的Topic和Queue等属性进行替换，同时将原来的Topic和Queue信息存储到消息的属性中，正因为消息topic被替换，故消息并不会转发到该原主题的消息消费队列，消费者无法感知消息的存在，不会消费。其实改变消息topic是RocketMQ的常用“套路”，回想一下延时消息的实现机制。
 
 2.Commit和Rollback操作以及Op消息的引入
 

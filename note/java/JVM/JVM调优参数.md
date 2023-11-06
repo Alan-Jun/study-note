@@ -16,8 +16,6 @@
 
 # jdk1.7 方法区内存配置参数
 
-
-
 -XX:MaxPermSize=128m  
 
 -XX:PermSize=128m  

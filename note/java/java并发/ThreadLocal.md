@@ -430,6 +430,35 @@ private Entry getEntryAfterMiss(ThreadLocal<?> key, int i, Entry e) {
         }
 在Entry数组中，删除指定Key的元素。如果找到待删除元素，首先将引用key值置空，然后从当前位置开始执行擦除过程。
 
-## ThreadLocal 内存泄漏问题
+# ThreadLocal使用注意事项
 
-有了上面我们的 ThreadLocal 的介绍，我们知道 ThreadLocal 在使用的时候会给每一个是用到它的线程创建一个 ThreadLocalMap 用来存放线程各自的副本，我们知道通常我们的线程的使用都是利用到线程池的，还有就是在一个服务系统中很可能线程池中的这些线程都是不会销毁的，也就是说如果有100个这样的线程没有销毁，在只有一个TheadLocal变量的时候，这100个线程中就存在 100个 ThreadLocalMap，以及 100个ThreadLocalMap 中会分别存放一个 entry；如果这些线程在执行完成任务之后没有新任务进来，相当于相当于限制的线程，但是这些线程占用的TheadLocal的entry确没有得到释放。相当于内存泄露了。虽然由于Key是弱引用会在gc的且内内存不足的回收掉，但是value 是无法回收掉的的。所以在在使用的时候 用完需要记得调用 remove() 方法。
+ThreadLocal如果使用不当会造成如下问题
+
+1. 脏数据
+2. 内存泄露
+
+## **脏数据**
+
+线程复用会造成脏数据。由于线程池会复用Thread对象，因此Thread类的成员变量threadLocals也会被复用。如果在线程的run()方法不显示调用remove()清理与线程相关的ThreadLocal信息，并且下⼀个线程不调用 set() 设置初始值，就可能get()到上个线程设置的值
+
+## 内存泄露
+
+```java
+// WeakReference<ThreadLocal> 意味着 ThreadLocal会被弱引用持有，任何一次gc都可能回收它（如果它的内存区在这次gc回收的区域）
+static class Entry extends WeakReference<ThreadLocal> {
+    /** The value associated with this ThreadLocal. */
+    Object value;
+
+    Entry(ThreadLocal k, Object v) {
+        super(k);
+        value = v;
+    }
+}
+```
+
+ThreadLocalMap使用 ThreadLocal 的弱引用作为key，如果⼀个ThreadLocal没有外部强引用来引用它，那么系统GC 的时候，这个ThreadLocal势必会被回收，这样⼀来，ThreadLocalMap中就会出现key为null的Entry，就没有办法访问这些key为null的Entry的value，如果当前线程再迟迟不结束的话，这些key为null的Entry的value就会⼀直存在⼀条强引用链：**Thread Ref -> Thread -> ThreaLocalMap -> Entry -> value**永远无法回收，造成内存泄漏。因为 key是 null了，这时候就算调用 set 也没法重新修改这块内存了。不过 ThreadLocal 的 set, get, remove 方法都有清楚这些 key = null 的数据。不过因为内存已经泄露了。如果调用不及时，还是可能给内存的管理带来麻烦。
+
+所以最好的方式的，使用完成之后 嗲用 remove 避免这样的问题产生
+
+
+
