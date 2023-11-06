@@ -197,7 +197,7 @@ https://www.cnblogs.com/kukuxjx/p/17539820.html
 
    
 
-   **了解上面啊的信息之后，我们当发现客户端请求的 RT过高，但是服务端的耗时，cpu，线程状态等正常的时候，我们可以看看 connection timeout 和 connection reset 是否过多，如果定位到，首先修改机器的tcp_abort_on_overflow =1 ，这样可以确切的通过 connection reset 这个异常信息来进一步确认（因为 connection timeout 不一定是 accept queue 慢了才会返回的异常信息）。然后再通过 ss -lnt / netstat -lnt 查看服务端的 accept queue 是否满了。如果是的话，可以增加这个队列的大小。 **
+   **了解上面啊的信息之后，我们当发现客户端请求的 RT过高，但是服务端的耗时，cpu，线程状态等正常的时候，我们可以看看 connection timeout 和 connection reset 是否过多，如果定位到，首先修改机器的 tcp_abort_on_overflow =1 ，这样可以确切的通过 connection reset 这个异常信息来进一步确认（因为 connection timeout 不一定是 accept queue 慢了才会返回的异常信息）。然后再通过 ss -lnt / netstat -lnt 查看服务端的 accept queue 是否满了。如果是的话，可以增加这个队列的大小。 **
 
    > 通常来说只有你肯定会有accept queue 异常的时候才设置为1
    >
