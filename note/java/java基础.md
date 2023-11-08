@@ -294,9 +294,9 @@ System.out.println(s5 == s6);  // true
 - [StackOverflow : What is String interning?](https://stackoverflow.com/questions/10578984/what-is-string-interning)
 - [深入解析 String#intern](https://tech.meituan.com/in_depth_understanding_string_intern.html)
 
-## new String("abc")
+## new String("abc") 创建了几个对象
 
-使用这种方式一共会创建两个字符串对象（前提是 String Pool 中还没有 "abc" 字符串对象）。
+使用这种方式一共会创建**两个对象**（前提是 String Pool 中还没有 "abc" 字符串对象）。
 
 - "abc" 属于字符串字面量，因此编译时期会在 String Pool 中创建一个字符串对象，指向这个 "abc" 字符串字面量；
 - 而使用 new 的方式会在堆中创建一个字符串对象。

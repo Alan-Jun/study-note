@@ -3,7 +3,8 @@
 AbstractQueuedLongSynchronizer **队列同步器**，是**用来构建锁或者其他同步组件的基础框架**，
 
 * **它使用了一个volatile int成员变量表示同步状态(管理同步状态)**
-* **通过内置的`FIFO`队列来完成对发生了资源"竞争"的线程的排队工作**
+* **发生竞争的时候通过 CAS + 自旋的方式尝试修改 volatile 状态的值（也就是获取锁）**
+* **但是为了避免，不必要的自旋。在第一次尝试失败后就会通过内置的`FIFO`队列来完成对发生了资源"竞争"的线程的排队工作**
 
 同步器的主要使用方式是继承，子类通过继承同步器并实现它的抽象方法来管理同步状态，在抽象方法的实现过程中免不了要对同步状态进行更改，这时就需要使用同步器提供的3 个方法（getState()、setState(int newState)和compareAndSetState(int expect,int update)）来进行操作，因为它们能够保证状态的改变是安全的。子类推荐被定义为自定义同步组件的静态内部类，同步器自身没有实现任何同步接口，它仅仅是定义了若干同步状态获取和释放的方法，来供自定义同步组件使用，同步器既可以支持独占式地获取同步状态，也可以支持共享式地获取同步态，这样就可以方便实现不同类型的同步组件（ReentrantLock、ReentrantReadWriteLock和CountDownLatch等）
 
@@ -16,8 +17,7 @@ AbstractQueuedLongSynchronizer **队列同步器**，是**用来构建锁或者�
 * getState()：获取当前同步状态。
 * setState(int newState)：设置当前同步状态。
 
-* compareAndSetState(int expect,int update)：使用CAS方式设置当前状态，该方法能够保证状态
-  设置的原子性。
+* compareAndSetState(int expect,int update)：使用CAS方式设置当前状态, 乐观锁的方式
 
 ## 同步器提供的模板方法
 

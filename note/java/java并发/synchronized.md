@@ -6,7 +6,7 @@ java中每一个对象都可以作为一个锁（锁是存在Java对象头里的
 2. 静态同步方法，锁是当前的类的Class的对象（该关键字作用于静态（static）方法）
 3. 同步块，这个的锁就是放在`synchronized` 的括号里的配置对象了
 
-JVM基于进入和退出Monitor对象来实现方法同步和代码块同步。代码块同步是使用monitorenter和monitorexit指令实现的，monitorenter指令是在编译后插入到同步代码块的开始位置，而monitorexit是插入到方法结束处和异常处。任何对象都有一个monitor与之关联，当且一个monitor被持有后，它将处于锁定状态。
+JVM基于进入和退出Monitor对象来实现方法同步和代码块同步。代码块同步是使用**monitorenter和monitorexit指令**实现的，**monitorenter指令是在编译后插入到同步代码块的开始位置，而monitorexit是插入到方法结束处和异常处。任何对象都有一个monitor与之关联，当且一个monitor被持有后，它将处于锁定状态。**
 
 根据虚拟机规范的要求，在执行monitorenter指令时，首先要去尝试获取对象的锁，如果这个对象没被锁定，或者当前线程已经拥有了那个对象的锁，把锁的计数器加1；相应地，在执行monitorexit指令时会将锁计数器减1，当计数器被减到0时，锁就释放了。如果获取对象锁失败了，那当前线程就要阻塞等待，直到对象锁被另一个线程释放为止。
 
@@ -62,7 +62,7 @@ ps: https://mp.weixin.qq.com/s/-xFSHf7Gz3FUcafTJUIGWQ 这个链接中的文章�
 
 ![image-20200412211943524](assets\image-20200412211943524.png)
 
-可以看到锁信息也是存在于对象的`mark word`中的。当对象状态为偏向锁（biasable）时，`mark word`存储的是偏向的线程ID；当状态为轻量级锁（lightweight locked）时，`mark word`存储的是指向线程栈中`Lock Record`的指针；当状态为重量级锁（inflated）时，为指向堆中的monitor对象的指针。
+**可以看到锁信息也是存在于对象的`mark word`中的。当对象状态为偏向锁（biasable）时，`mark word`存储的是偏向的线程ID；当状态为轻量级锁（lightweight locked）时，`mark word`存储的是指向线程栈中`Lock Record`的指针；当状态为重量级锁（inflated）时，为指向堆中的monitor对象的指针。**
 
 ## 偏向锁
 

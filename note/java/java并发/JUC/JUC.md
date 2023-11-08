@@ -349,7 +349,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
         final Thread current = Thread.currentThread();
         int c = getState();
         if (c == 0) {// 判断当前锁是否已被某线程获取
-            if (compareAndSetState(0, acquires)) {
+            if (compareAndSetState(0, acquires)) {// cas的方式尝试获取锁状态
                 setExclusiveOwnerThread(current);
                 return true;
             }
@@ -367,6 +367,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
 	 * 独占式：释放锁
 	 */
     protected final boolean tryRelease(int releases) {
+        
         int c = getState() - releases;
         if (Thread.currentThread() != getExclusiveOwnerThread())
             throw new IllegalMonitorStateException();
@@ -375,6 +376,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
             free = true;
             setExclusiveOwnerThread(null);// 将锁当前的独占锁置为 null
         }
+        // 由于是独占锁，所以无需使用 cas的方式释放锁，因为只有获取锁的线程能执行到这个方法
         setState(c);
         return free;
     }
@@ -674,12 +676,12 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
             if (w + exclusiveCount(acquires) > MAX_COUNT)
                 throw new Error("Maximum lock count exceeded");
             // Reentrant acquire 可重入
-            setState(c + acquires);
+            setState(c + acquires);// 重入无需 cas的方式管理状态
             return true;
         }
         // writerShouldBlock 决定了当前是公平还是非公平，由初始化时选择的模式决定，和ReemrantLock 是一样的
         if (writerShouldBlock() ||
-            !compareAndSetState(c, c + acquires))
+            !compareAndSetState(c, c + acquires))// cas 的方式抢占写锁 （读写，写写都是互斥的） 
             return false;
         setExclusiveOwnerThread(current);// 设置独占线程
         return true;
@@ -697,7 +699,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
         boolean free = exclusiveCount(nextc) == 0;
         if (free)
             setExclusiveOwnerThread(null);
-        setState(nextc);
+        setState(nextc);// 写锁是独占式的，写锁存在读锁也会被block. 所以无需cas的修改状态。
         return free;
     }
     /**
@@ -715,7 +717,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
         // 并且获得锁的线程数量不能超过 MAX_COUNT 这个值也就是共享锁的最大共享次数，而不是最大贡献线程数，应为重入也会计算在内
         if (!readerShouldBlock() &&
             r < MAX_COUNT &&
-            compareAndSetState(c, c + SHARED_UNIT)) {
+            compareAndSetState(c, c + SHARED_UNIT)) {// cas 的方式尝试获取锁（因为读写互斥，所以需要使用cas的方式获取读锁）
             if (r == 0) {
                 firstReader = current;// 记录当前并发下这是第一个获取读锁的线程
                 firstReaderHoldCount = 1;// 记录该线程的重入次数
@@ -830,7 +832,7 @@ abstract static class Sync extends AbstractQueuedSynchronizer {
                 // Releasing the read lock has no effect on readers,
                 // but it may allow waiting writers to proceed if
                 // both read and write locks are now free.
-                return nextc == 0;
+                return nextc == 0;// 释放完所有的读锁之后，唤醒fifo队列中等待的线程
         }
     }
 
@@ -1100,8 +1102,8 @@ private static final class Sync extends AbstractQueuedSynchronizer {
             if (c == 0)
                 return false;
             int nextc = c-1;
-            if (compareAndSetState(c, nextc))
-                return nextc == 0;
+            if (compareAndSetState(c, nextc)) // cas 尝试释放自己所持有的锁状态
+                return nextc == 0;// 只有释放完所有的锁，才唤醒同步队列中等待的线程
         }
     }
 }
@@ -1399,7 +1401,7 @@ public void reset() {
 
 ## Semaphore
 
-用于控制同时访问特定资源的线程数量的工具，用于保证合理使用公共资源 **也就是控制流量**
+用于控制同时访问特定资源的线程数量的工具，用于保证合理使用公共资源 **也就是控制并发流量（不是QPS）**
 
 通过预设信号量来控制
 
