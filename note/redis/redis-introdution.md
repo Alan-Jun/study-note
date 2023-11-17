@@ -1824,6 +1824,14 @@ ZADD 命令在`key`后面分数/成员（score/member）对前面支持一些参
 
 - 成员的新分数（双精度的浮点型数字）字符串。
 
+### ZREM 
+
+```
+ZREM key member [member ...]
+```
+
+用于移除队列中一个或者多个成员
+
 ### ZSCORE
 
 `ZSCORE key member`
