@@ -223,8 +223,6 @@ sentinel它的核心功能主要是流量控制，熔断降级等等，这些都
 
 滑动时间窗口算法在计数器算法的基础上做了优化，他将计数的区间分成了多个小窗口，每次大窗口向后滑动一个小窗口，并且保证大窗口内的流量不超出阈值
 
-一个讲解该算法的博客文章：https://www.cnblogs.com/huansky/p/13488234.html
-
 代码可以参考 sentinel 的窗口实现方案，该方案还兼顾了并发场景的数据统计核心代码是LeapArray，他是一个环形的滑动窗口，内存使用率较高，代码阅读入口 StatisticSlot ->查看其中一个统计方法即可： node.addPassRequest(count) 
 
 ```java
@@ -270,7 +268,7 @@ WindowWrap有几个参数：
 
 * [calculateWindowStart](#calculateWindowStart) 方案： 用于在 currentWindow 内部逻辑中帮助计算当前时间对应的窗口的 startTime
 
-  **calculateTimeIdx 计算到的位置的开始时间如果和 calculateWindowStart 不相等，那么证明需要滑动了，也就是更新当前索引位置的 start time 和 情况当前小窗口的计数。**
+  **calculateTimeIdx 计算到的位置的开始时间如果和 calculateWindowStart 不相等，那么证明需要滑动了，也就是更新当前索引位置的 start time 和 清空当前小窗口的计数。**
 
   **至于请求是否会被拦截，那就使用所有小窗口的计数总和+当前请求的的数量和 limit做对比，如果大于 limit 则拦截。反之放行** 
 
@@ -289,16 +287,12 @@ public WindowWrap<T> currentWindow(long timeMillis) {
         // 如果该窗口未初始化，初始化该小窗口
         if (old == null) {
             /*
-             *     B0       B1      B2    NULL      B4
+             *     B0       B1      B2    NULL      NULL
              * ||_______|_______|_______|_______|_______||___
              * 200     400     600     800     1000    1200  timestamp
              *                             ^
              *                          time=888
-             *            bucket is empty, so create new and update
-             *
-             * If the old bucket is absent, then we create a new bucket at {@code windowStart},
-             * then try to update circular array via a CAS operation. Only one thread can
-             * succeed to update, while other threads yield its time slice.
+             *            这个位置命中的窗口还没完成初始化,所以这里会新建一个 WindowWrap
              */
             WindowWrap<T> window = new WindowWrap<T>(windowLengthInMs, windowStart, newEmptyBucket(timeMillis));
             // cas 的方式将其添加到循环数组中
@@ -367,7 +361,7 @@ public WindowWrap<T> currentWindow(long timeMillis) {
 
 ```
 
-### calculateTimeIdx(LeapArray)
+### calculateTimeIdx(timeMillis)
 
 ```java
 // 计算当前时间对应的窗口索引
@@ -380,7 +374,7 @@ private int calculateTimeIdx(/*@Valid*/ long timeMillis) {
   // 假如我们窗口总大小是 600ms,分了三个小窗口 windowLengthInMs = 200ms
   // 0 / 200 = 0
   // 100 / 200 = 0
-  // 101 / 200 = 0
+  // 199 / 200 = 0
   // 200 / 200 = 1
   // 399 / 200 = 1
   // 400 / 200 = 2
@@ -391,7 +385,7 @@ private int calculateTimeIdx(/*@Valid*/ long timeMillis) {
 }
 ```
 
-### calculateWindowStart
+### calculateWindowStart(timeMillis)
 
 ```java
 // 计算当前时间对应的窗口的startTime
@@ -448,7 +442,7 @@ public boolean canExecute(){
 
 ## 漏桶算法
 
-算法思想：当有请求到来时先放到木桶中，worker以固定的速度从木桶中取出请求进行相应。如果木桶已经满了，直接返回请求频率超限的错误码或者页面。
+算法思想：当有请求到来时先放到木桶中，worker以固定的速度从木桶中取出请求进行响应。如果木桶已经满了，直接返回请求频率超限的错误码或者页面。
 
 **漏桶算法能够强行限制数据的传输速率（流量整形），能够达成流量平缓处理，缺点就是不能处理突发流量，会被强制限速。对有些业务场景的请求响应的使用体验会有影响**。
 
@@ -458,7 +452,7 @@ public boolean canExecute(){
 
 <img src="../../分布式/限流降级熔断/assets/image-20220308192033981.png" alt="image-20220308192033981" style="zoom:50%;" />
 
-**这种实现方式需要借助一个线程。来实现很恒定速率**
+**这种实现方式需要借助一个线程。来实现恒定速率**
 
 <img src="../../Interview-questions/assets/image-20231024114619501.png" alt="image-20231024114619501" style="zoom:50%;" />
 

@@ -2,6 +2,14 @@
 
 文章来自 GitHub https://github.com/apache/rocketmq/tree/master/docs/cn
 
+
+
+# 最佳实践
+
+https://github.com/apache/rocketmq/blob/master/docs/cn/best_practice.md
+
+还可以看一下  https://rocketmq.apache.org/zh/docs/featureBehavior/08consumerloadbalance 这个，内容也写的很好
+
 # 实际使用
 
 ## 生产者
@@ -71,11 +79,10 @@ public @interface RocketMQMessageListener {
    解决方法
 
    1. 选择一个好的hash函数
-   2. 可以看看是否可以对在增加一些字段来作为分区的计算基准，让热点用户的数据能够更均衡的分布
+   2. 可以看看是否可以再增加一些字段来作为分区的计算基准，让热点用户的数据能够更均衡的分布
 
 3. 消费失败时无法跳过：**解决方案，可以在业务处理的时候做设计，让有顺序的业务消费操作的时候检查上一步操作是否成功，如果成功才能处理，否则处理失败，这样可以保证某一批顺序的消息中间有失败的了时候，后续的消费都会失败，这样就可以做失败跳过的策略，然后将这类消息到重试队列中，让他们再次按照顺序被重试消费掉**
 
-   这块可以看我写的[kafka的文章中的怎么做顺序消息的消费，同时避免性能下降](Kafka.md) consumer 一节中的讲解顺序消费和非顺序消费的处理问题
 
 **实现顺序消费主要有几点**
 
@@ -97,9 +104,19 @@ RocketMQ主要由 Producer、Broker、Consumer 三部分组成，其中Producer 
 
 负责生产消息，一般由业务系统负责生产消息。一个消息生产者会把业务应用系统里产生的消息发送到broker服务器。RocketMQ提供多种发送方式，同步发送、异步发送、顺序发送、单向发送（one way）。同步和异步方式均需要Broker返回确认信息，单向发送不需要。
 
+**消息生产者Producer作为客户端发送消息时候，需要根据消息的Topic从本地缓存的TopicPublishInfoTable获取路由信息。如果没有则更新路由信息会从NameServer上重新拉取，同时Producer会默认每隔30s向NameServer拉取一次路由信息。**
+
 ### 消息消费者（Consumer）
 
 负责消费消息，一般是后台系统负责异步消费。一个消息消费者会从Broker服务器拉取消息、并将其提供给应用程序。从用户应用的角度而言提供了两种消费形式：拉取式消费、推动式消费。
+
+**消息消费者 consumer 作为客户端，需要根据配置的Topic从本地缓存的TopicPublishInfoTable获取路由信息。如果没有则更新路由信息会从NameServer上重新拉取，同时consumer会默认每隔30s向NameServer拉取一次路由信息。**
+
+**并再完成客户端的负载均衡后，选择其中的某一个或者某几个消息队列来拉取消息并进行消费。**
+
+[Consumer的负载均衡](#Consumer的负载均衡)
+
+补充 ： https://rocketmq.apache.org/zh/docs/featureBehavior/08consumerloadbalance
 
 ### 主题（Topic）
 
@@ -107,11 +124,21 @@ RocketMQ主要由 Producer、Broker、Consumer 三部分组成，其中Producer 
 
 ### 代理服务器（Broker Server）
 
-消息中转角色，负责存储消息、转发消息。代理服务器在RocketMQ系统中负责接收从生产者发送来的消息并存储、同时为消费者的拉取请求作准备。代理服务器也存储消息相关的元数据，包括消费者组、消费进度偏移和主题和队列消息等。
+消息中转角色，负责存储消息、转发消息。
+
+代理服务器在RocketMQ系统中负责接收从生产者发送来的消息并存储、同时为消费者的拉取请求作准备。
+
+代理服务器也存储消息相关的元数据，包括消费者组、消费进度偏移和主题和队列消息等。
+
+**Broker启动后需要完成一次将自己注册至NameServer的操作；随后每隔30s时间定时向NameServer上报Topic路由信息。**
 
 ### 名字服务（Name Server）
 
-名称服务充当路由消息的提供者。生产者或消费者能够通过名字服务查找各主题相应的Broker IP列表。多个Namesrv实例组成集群，但相互独立，没有信息交换。
+名称服务充当路由消息的提供者。
+
+生产者或消费者能够通过名字服务查找各主题相应的Broker IP列表。
+
+多个Name Server实例组成集群，但相互独立，没有信息交换。broker 需要和所有 Name Server 机器建立连接并注册自己的信息，并且需要定时同步心跳消息给到 Name Server
 
 ### 拉取式消费（Pull Consumer）
 
@@ -125,7 +152,7 @@ Consumer消费的一种类型，该模式下Broker收到数据后会主动推送
 
 ### 生产者组（Producer Group）
 
-同一类Producer的集合，这类Producer发送同一类消息且发送逻辑一致。如果发送的是事务消息且原始生产者在发送之后崩溃，则Broker服务器会联系同一生产者组的其他生产者实例以提交或回溯消费。
+同一类Producer的集合，这类Producer发送同一类消息且发送逻辑一致。**如果发送的是事务消息且原始生产者在发送之后崩溃，则Broker服务器会联系同一生产者组的其他生产者实例以提交或回溯消费。**
 
 ### 消费者组（Consumer Group）
 
@@ -220,6 +247,12 @@ RocketMQ事务消息（Transactional Message）是指应用本地事务和发送
 > https://blog.csdn.net/qq_32099833/article/details/120247549
 >
 > **基于rocketMQ 存消息的方式，他会创建18个线程分别对18个级别的延迟队列做处理。由于消息是顺序写入如可以知道同一个延迟级别的队列前面的消息一定比队列后面追加的消息的更早得到释放，也就是说只要定时的去拉去这个队列的前面的一批消息做时间检查，满足即可从延迟队列存放到对应的topic中即可（commitLog）**
+>
+> **最高到2小时，你要觉得不够，要实现4小时怎么做呢？**
+>
+> 那就在消息里面带上这个次数、时间，比如带个1，表示消费一次的死后再次发送到 2小时这个队里，这次发送的会后把消息里面的次数数据-1；
+>
+> 
 
 ### 消息重试
 
@@ -234,8 +267,8 @@ Consumer消费消息失败后，要提供一种重试机制，令消息再消费
 
 生产者在发送消息时，同步消息失败会重投，异步消息有重试，**oneway没有任何保证**。消息重投保证消息尽可能发送成功、不丢失，但可能会造成消息重复，消息重复在RocketMQ中是无法避免的问题。消息重复在一般情况下不会发生，当出现消息量大、网络抖动，消息重复就会是大概率事件。另外，生产者主动重发、consumer负载变化也会导致重复消息。如下方法可以设置消息重试策略：
 
-- retryTimesWhenSendFailed:同步发送失败重投次数，默认为2，因此生产者会最多尝试发送retryTimesWhenSendFailed + 1次。不会选择上次失败的broker，尝试向其他broker发送，最大程度保证消息不丢。超过重投次数，抛出异常，由客户端保证消息不丢。当出现RemotingException、MQClientException和部分MQBrokerException时会重投。
-- retryTimesWhenSendAsyncFailed:异步发送失败重试次数，异步重试不会选择其他broker，仅在同一个broker上做重试，不保证消息不丢。
+- retryTimesWhenSendFailed:同步发送失败重投次数，默认为2，因此生产者会最多尝试发送retryTimesWhenSendFailed + 1次。不会选择上次失败的broker(**顺序消息场景，自己做了sharding 那么这个选其他broker的功能会失效**)，尝试向其他broker发送，最大程度保证消息不丢。**超过重投次数，抛出异常，由客户端保证消息不丢**。当出现RemotingException、MQClientException和部分MQBrokerException时会重投。
+- retryTimesWhenSendAsyncFailed:异步发送失败重试次数，异步重试不会选择其他broker，仅在同一个broker上做重试，不保证消息不丢。 监听listener 记录日志。如果要保证可靠性，需要在listener中实现重试/在消息发送前先写db.发送成功更新状态，用定时任务做消息补偿
 - retryAnotherBrokerWhenNotStoreOK:消息刷盘（主或备）超时或slave不可用（返回状态非SEND_OK），是否尝试发送到其他broker，默认false。十分重要消息可以开启。
 
 ### 流量控制

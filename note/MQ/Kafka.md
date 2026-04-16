@@ -1,6 +1,6 @@
 # 快速入门
 
-本文内容来自《Apache kfka 源码刨析》，以及网络上的博客，有引用的博客我都会贴链接，感谢你们的分享帮助我们能够更快的阅读源码
+本文内容来自《Apache kafka 源码刨析》，以及网络上的博客，有引用的博客我都会贴链接，感谢你们的分享帮助我们能够更快的阅读源码
 
 > 网络上的博客：
 >
@@ -9,12 +9,12 @@
 
 # 简介
 
-Apache Kafka 是一种分布式的，基于发布/订阅的消息系统，由Scala编写而成的，它具备快速，可扩展，可持久化的特点，Kafka有着下面这些特性，让其受到越来越到的开发人员的青睐
+Apache Kafka 是一种分布式的，基于发布/订阅的消息系统，由scala编写而成的，它具备快速，可扩展，可持久化的特点，Kafka有着下面这些特性，让其受到越来越到的开发人员的青睐
 
-* 近乎实时性的消息处理能力。即使面对海量消息也能高效的存储以及查询消息（后面会解释是怎么设计实现的），Kakfka 将消息保存在磁盘中，在其设计中并不惧怕磁盘操作。他会以顺序读写的方式访问持久化到磁盘（可以利用到操作系统的Page cache 功能加速磁盘的读写）从而避免的读写磁盘导致的性能瓶颈
+* 近乎实时性的消息处理能力。即使面对海量消息也能高效的存储以及查询消息（后面会解释是怎么设计实现的），Kafka 将消息保存在磁盘中，在其设计中并不惧怕磁盘操作。他会以顺序读写的方式访问持久化到磁盘（可以利用到操作系统的Page cache 功能加速磁盘的读写）从而避免的读写磁盘导致的性能瓶颈, 同时使用 MMap 减少一次用用户态到内核态的切换和数据拷贝操作。 
 * Kafka 支持批量的读写消息，并且会对消息进行批量压缩，提高了网络利用率
 * Kafka支持分区（partition）消息，保证分区中的消息是有序的，而分区之间可以并发操作，这样提高了Kafka的并发能力
-* 并且分区（partition）是支持在线水平扩展的
+* 并且分区（partition）是支持在线水平扩展（动态扩展）
 * Kafka支持为每个分区（partition）创建多个副本，其中有一个partition会被选举为leader，负责读写，其他的follower 副本只负责和leader进行数据同步，并且Kafka会将这些follower均匀分布到集群的不同broker上，实现性能最大化以及提高数据的容灾能力
 
 # Kafka的应用场景：
@@ -76,11 +76,94 @@ zstd, lz4, snappy, gzip，不过配置的话是可以配置：
 
 生产者的消息发送处理除了批量发送之外，还进行的了数据压缩，目前支持 gzip,snappy,lz4
 
-partition的 sharding  也是在发送端控制的，如果有顺序性的要求需要指定sharding策略
+partition的 sharding  也是在发送端控制的，如果有顺序性的要求需要可以自定义分区策略，也可以生成一个分区key,发送消息的时候带上这个key.
+
+### 发送端的消息发送的分区策略
+
+1. 指定 Partition 按照指定的Partition 发送
+
+2. 没指定 Partition 但是传了Key,使用key的hash code 对分区数取模选择Partition。
+
+3. 既没有指定 partition 和 key的情况下 使用 Sticky Partition （粘性分区）策略，会随机选择一个分区组织成一个 bath，直到这个bath的消息达到一定数量（batch.size ： 默认值 16KB）才发送出去，或者达到最大等待时间(linger.ms ： 默认值0 表示消息必须立刻发送出去。但是这样会导致网路请求频繁，性能不是特别好，可以设置 10ms 完成一次，这样技能保证一定的实时性也能保证一定的性能)，也会发送 这个 bath到 broker. 这位为了避免因为bath一直不满足要求，导致消息一直滞留在内存中，从而导致的消息延迟问题。
+
+   优点：一个批次里面多条数据，完成发送，减少IO. 提供性能。
+
+4. 自定义分区策略
+
+   实现自定义分区策略 MyPartitioner：
+
+   ```java
+   public class MyPartitioner implements Partitioner {
+       private final AtomicInteger counter = new AtomicInteger(0);
+   
+       @Override
+       public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
+           // 获取该 topic 可用的所有分区信息
+           List<PartitionInfo> partitionInfos = cluster.availablePartitionsForTopic(topic);
+           int size = partitionInfos.size();
+           if(keyBytes==null){
+               // 如果 keyBytes 为 null，表示该消息没有 key，此时采用 round-robin 的方式将消息均匀地分配到不同的分区中。
+               // 每次调用 getAndIncrement() 方法获取计数器的当前值并自增，然后对可用分区数取模，得到该消息应该被分配到的分区编号。
+               return counter.getAndIncrement() % size;
+           }else{
+               // 如果 keyBytes 不为 null，表示该消息有 key，此时采用 murmur2 哈希算法将 key 转换为一个整数值，并对可用分区数取模，得到该消息应该被分配到的分区编号。
+               return Utils.toPositive(Utils.murmur2(keyBytes) % size);
+           }
+       }
+   
+       @Override
+       public void close() {
+   
+       }
+   
+       @Override
+       public void configure(Map<String, ?> map) {
+   
+       }
+   }
+   
+   
+   public class CustomProducer01 {
+       private static final String brokerList = "10.65.132.2:9093";
+       private static final String topic = "test";
+   
+       public static Properties initConfig(){
+           Properties properties = new Properties();
+           properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,brokerList);
+           properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+           properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+   
+           // 使用自定义分区器
+           properties.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, MyPartitioner.class.getName());
+           return properties;
+       }
+   
+       public static void main(String[] args) {
+           // kafka生产者属性配置
+           Properties properties = initConfig();
+           // kafka生产者发送消息，默认是异步发送方式
+           KafkaProducer<String, String> kafkaProducer = new KafkaProducer<String, String>(properties);
+           ProducerRecord<String, String> producerRecord = new ProducerRecord<>(topic, "你好，kafka,使用自定义分区器");
+           kafkaProducer.send(producerRecord, new Callback() {
+               @Override
+               public void onCompletion(RecordMetadata recordMetadata, Exception e) {
+                   if(e==null){
+                       System.out.println("recordMetadata发送的分区为："+recordMetadata.partition());
+                   }
+               }
+           });
+           // 关闭资源
+           kafkaProducer.close();
+       }
+   }
+   
+   ```
+
+   
 
 ### 发送顺序消息的时候怎么保证sharding 尽量均匀
 
-1. 我们知道如果我们简单的使用类似 订单id来做分区控制，还是可以的，但是有的场景如果我们使用的是用户id,这个就会存在热点问题，有的用户操作频繁，如果这些用户的数据简单的通过uid取分区就回导致某一些分区的数据量要大很多，怎么解决呢？在分区的时候增加一些新的业务字段作为条件参与分区的选择
+1. 我们知道如果我们简单的使用类似 订单id来做分区控制，还是可以的，但是有的场景如果我们使用的是用户id,这个就会存在热点问题，有的用户操作频繁，如果这些用户的数据简单的通过uid分区就回导致某一些分区的数据量要大很多，怎么解决呢？在分区的时候增加一些新的业务字段作为条件参与分区的选择， **比如生成一个场景值，参与分区计算，这样场景值和 uid就不是绑定关系，同一个用户同一个场景，不同时间点生成的值不一样，这样既能把需要顺序的这些消息通过这个场景值分到同一个分区，又不会因为某个 uid操作频繁，导致这类消息倾斜到某些 partition**
 2. 选择一个散列性好的hash算法
 
 ## consumer
@@ -88,26 +171,6 @@ partition的 sharding  也是在发送端控制的，如果有顺序性的要求
 根据下文consumer group 中提到的 topic 的partition 和 consumer消费的关系，如果我们要在保证顺序性的条件下，充分利用机器资源，可以使用线程池，每一个线程单独做一个 consumer ，这样可以利用到单机的多核资源；
 
 如果没有顺序要求，还可以设置成单机多consumer 多消费线程的两个线程池的模型
-
-
-
-### **顺序消费怎么保证性能的前提去处理消费失败问题**
-
-顺序消费中我们遇到消费某一条消息失败问题怎么处理，保证我们的消费性能不会被影响，然后导致消息积压或者实时性降低问题？
-
-我这边的一种方式是，对于有顺序的消费场景，可以让这个顺序场景的几个消息的处理有序，比如一阶段落数据1，二阶段处理的时候查询一阶段有没有完成，如果没有完成就直接失败，同理如果第三阶段
-
-这样处理失败的阶段直接重新发回kafka，让后续重试，这样可以不阻碍流程；或者记录下这些消息，然后使用定时任务去做补偿。
-
-### 非顺序消费怎么保证性能的前提去处理消费失败问题
-
-**非顺序消费**其实也类似，不过非顺序消费场景性能可以做到更快，因为可以异步多线程去消费多个消息。最后做一次offset的提交，这会遇到的问题是什么呢？比如你消费100条在多线程中处理。中间有失败的怎么处理呢？可以采用刚才顺序消费中的方式失败发回kafak或者找个地方存起来使用定时任务去做补偿。
-
-**如果业务允许消息丢失，那么就不需要采取先落日志的策略，同时broker端也不必采取 ISR的ack可靠性策略**
-
-https://www.cnblogs.com/buttercup/p/14208062.html
-
-https://blog.csdn.net/weixin_42131628/article/details/113580928
 
 ## Consumer group
 
@@ -139,7 +202,7 @@ topic中的 partition 不管是”独占“还是“广播”，partition 都是
 >
 > <img src="https://mmbiz.qpic.cn/mmbiz_jpg/ibBMVuDfkZUkGTrS4o7dp9ONqkuQQ6Kr9X81Cqviag3zbqyz9Agtqiacyyw71qg3QhV7ocn3bnFYD87sLiaaRmdPHQ/640?wx_fmt=jpeg&wxfrom=5&wx_lazy=1&wx_co=1" alt="图片" style="zoom:33%;" />
 >
-> **RoundRobin**
+> **RoundRobin** (默认)
 >
 > 也就是我们常说的轮询了，这个就比较简单了，不画图你也能很容易理解。
 >
@@ -315,7 +378,7 @@ kafka 会启动一个后台压缩线程，定期将 key 相同的 message 进行
 
 ## AR,ISR,OSR,HW,LEO
 
-leader 副本负责维护和跟踪 ISR 集合中所有 follower 副本的滞后状态， 当 follower 副本落后 太多或失效时， leader副本会把它从ISR集合中剔除。 如果OSR集合中有follower副本“追上’“了 leader副本，那么 leader副本会把它从 OSR集合转移至 ISR集合。 默认情况下， 当 leader副本发生故障时，只有在 ISR集合中的副本才有资格被选举为新的 leader， 而在 OSR集合中的副本则没有任何机会(不过这个原则也可以通过修改相应的参数配置来改变) 。
+leader 副本负责维护和跟踪 ISR 集合中所有 follower 副本的滞后状态， 当 follower 副本落后 太多或失效时， leader副本会把它从[ISR集合](https://blog.51cto.com/u_16079703/6815354)中剔除。 如果OSR集合中有follower副本“追上’“了 leader副本，那么 leader副本会把它从 OSR集合转移至 ISR集合。 默认情况下， 当 leader副本发生故障时，只有在 ISR集合中的副本才有资格被选举为新的 leader， 而在 OSR集合中的副本则没有任何机会(不过这个原则也可以通过修改相应的参数配置来改变) 。
 
 ISR 与 HW 和 LEO 也有紧密的关系 。 HW 是 High Watermark 的缩写，俗称高水位，它标识 了一个特定的消息偏移量(offset)，消费者只能拉取到这个 offset之前的消息。
 
@@ -357,8 +420,6 @@ LEO 是 Log End Offset 的缩写，它标识当前日志文件中下一条待写
 2. 同步发送，同步发送返回Future对象，我们可以知道发送结果，然后进行处理
 3. 异步发送，发送消息，同时指定一个回调函数，根据结果进行相应的处理
 
-## 服务端
-
 acks 参数配置：
 
 1. 0：producer 不等待 broker 的 ack，这一操作提供了一个最低的延迟，broker 一接收到还没有写入磁盘就已经返回，当 broker 故障时有可能丢失数据；
@@ -368,6 +429,10 @@ acks 参数配置：
 page cache 写入，因为通常是不会采用同步刷盘的，所以存在丢失的风险（**存在副本的情况下不可能都丢，所以我们通常需要最少2个副本，并且最好部署在不同的物理机上**），其实就算采用同步刷盘也有丢失风险，因为page cache 刷的数据是写到硬盘的一个自带的缓冲区中，并不是说直接刷到硬盘中
 
 **采用ISR ack 策略，同时配置至少写入到一个副本才算成功**
+
+## 服务端
+
+主要是涉及到消息的刷盘的配置，是同步还是异步，异步是配置的多长时间刷盘一次
 
 ## 消费端
 
@@ -492,9 +557,7 @@ Kafka会采用简单的负载均衡方式找到注册连接数最少的selector�
 
     **provider,broker , consumer 都有使用到**
 
-2. 序列化，反序列化 **provider,broker , consumer 都有使用到**
-
-3. 消息批量压缩后发送，提高了网络利用率
+3. 消息批量且压缩后发送，提高了网络利用率
 
    目前支持 zstd, lz4, snappy, gzip
 
@@ -513,8 +576,6 @@ Kafka会采用简单的负载均衡方式找到注册连接数最少的selector�
    > ps: Kafka 不会把一批消息再还原成多条消息，再一条一条地处理，这样太慢了。Kafka 这块儿处理的非常聪明，每批消息都会被当做一个“批消息”来处理。也就是说，在 Broker 整个处理流程中，无论是写入磁盘、从磁盘读出来、还是复制到其他副本这些流程中，批消息都不会被解开，一直是作为一条“批消息”来进行处理的。
 
 6. IO使用顺序IO利用操作系统的 PageCache , 同时使用mmap 减少了一次 用户态数据到内核数据的拷贝 **broker使用到**
-
-7. 在保证消息可靠性的前提下，提供了一个高性能的数据同步方案 ： ISR(In Sync replica) ， HighWatermark ,Log End Offset 设计 **broker使用到**
 
 8. 不提供push 到consumer的能力，简化了设计，降低了这一块的性能损耗，而是将消息消费完全交给 consumer pull, consumer 可以根据offset 自己选择从哪里开始消费
 

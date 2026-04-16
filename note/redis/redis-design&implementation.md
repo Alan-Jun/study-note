@@ -239,7 +239,7 @@ typedef struct dictType{
 
 上面已经提到过了，这里使**用了链地址法来解决hash冲突**，也就是当发生hash冲突的时候，会以链的方式，形成链表。（这里的形成链的过程有一些特别的设计） 为了速度考虑，总是将产生冲突的最新的节点插入到链表的头部，也就是说最新的数据放在前面，因为这样的数据相对最容易被访问到
 
-### rehash 
+### rehash
 
 扩容的时候操作和hashMap 的扩容基本一样，不过 redis没有树结构，而且有一点很特别的是，redis这里使用的是 [渐进式rehash](#渐进式rehash) 
 
@@ -381,7 +381,7 @@ API :
 
 ![image-20200511151411408](assets/image-20200511151411408.png)
 
-# quickList
+## quickList
 
 https://zhuanlan.zhihu.com/p/102422311
 
@@ -501,7 +501,7 @@ typedef struct redisObject{
 
 #### 相同分数的成员
 
-有序集合里面的成员是不能重复的都是唯一的，但是，不同成员间有可能*有相同的score*。当多个成员有相同的score时，他们将是*有序的[字典](#字典)*（ordered lexicographically）（仍由分数作为第一排序条件，然后，相同分数的成员按照字典规则(使用value来作为key)相对排序）。
+有序集合里面的成员是不能重复的都是唯一的，但是，不同成员间有可能*有相同的score*。当多个成员有相同的score时，他们将是*有序的[字典](#字典)*（ordered lexicographically）（仍由分数作为第一排序条件，然后，**相同分数的成员按照字典规则**(使用value来作为key)相对排序）。
 
 ### 哈希表/散列(hashes)
 

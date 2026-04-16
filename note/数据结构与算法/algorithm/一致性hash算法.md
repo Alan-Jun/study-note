@@ -138,7 +138,7 @@
 
 
 
-可以看一下 treeMap的 ceilingEntry方法，理解查找树的概念的能很容易看懂这个代码，所以如果不了解的可以学习一下查找树的概念
+可以看一下 	的 ceilingEntry方法，理解查找树的概念能很容易看懂这个代码，所以如果不了解的可以学习一下查找树的概念
 
 ```
 final Entry<K,V> getCeilingEntry(K key) {
@@ -154,6 +154,10 @@ final Entry<K,V> getCeilingEntry(K key) {
             if (p.right != null) {
                 p = p.right;
             } else {
+                /**
+                  两种情况，第一种从 root 一直往右子树查找，找不到大于自己的，这时候向上的回溯逻辑最终 parent = null
+                  第二种。进入了某一个子树A的子树查找，证明这个树中存在币自己大的，但是在左子树中没有找到把自己大的，需要向上回溯查到到那个这颗子树 A的root节点。
+                 */
                 Entry<K,V> parent = p.parent;
                 Entry<K,V> ch = p;
                 while (parent != null && ch == parent.right) {
